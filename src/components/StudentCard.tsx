@@ -1,0 +1,125 @@
+import React, { useState } from 'react';
+import { Student } from '../types';
+import { Mail, GraduationCap, Calendar, User, UserCheck, Camera, Printer } from 'lucide-react';
+import { motion } from 'motion/react';
+import StudentCameraModal from './StudentCameraModal';
+
+interface StudentCardProps {
+  key?: string;
+  student: Student;
+  isSelected: boolean;
+  onSelect: () => void;
+  onUpdateStudent?: (updated: Student) => void;
+  onPrint?: () => void;
+}
+
+const isImageAvatar = (avatar: string) => {
+  return avatar.startsWith('data:image') || avatar.startsWith('http') || avatar.startsWith('/');
+};
+
+export default function StudentCard({ student, isSelected, onSelect, onUpdateStudent, onPrint }: StudentCardProps) {
+  const [showCamera, setShowCamera] = useState(false);
+
+  return (
+    <>
+      <motion.div
+        onClick={onSelect}
+        className={`StudentCard relative p-5 rounded-2xl border transition-all cursor-pointer duration-300 ${
+          isSelected
+            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100'
+            : 'bg-white border-gray-100 text-gray-900 hover:border-gray-200 hover:shadow-sm'
+        }`}
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+      >
+        <div className="flex gap-4 items-start">
+          <div className="relative shrink-0">
+            {/* Avatar display frame */}
+            <div className={`w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center relative border ${
+              isSelected ? 'border-indigo-400 bg-white/15' : 'border-gray-150 bg-slate-50'
+            }`}>
+              {isImageAvatar(student.avatar) ? (
+                <img src={student.avatar} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="text-3xl font-sans" role="img" aria-label="student avatar">
+                  {student.avatar}
+                </span>
+              )}
+            </div>
+
+            {/* Quick Camera Badge Trigger */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation(); // prevent selecting the card
+                setShowCamera(true);
+              }}
+              className={`absolute -bottom-1 -right-1 p-1 rounded-full border shadow-xs hover:scale-110 active:scale-95 transition-all text-xs cursor-pointer ${
+                isSelected 
+                  ? 'bg-amber-500 border-amber-400 text-white hover:bg-amber-600' 
+                  : 'bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-700'
+              }`}
+              title="Prendre une photo de l'élève"
+            >
+              <Camera className="h-3 w-3" />
+            </button>
+          </div>
+
+          <div className="space-y-1 flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-1">
+              <h3 className={`font-bold font-sans text-base truncate ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+                {student.name}
+              </h3>
+              {isSelected && <span className="bg-white/20 text-white text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shrink-0"><UserCheck className="h-2.5 w-2.5" /> Actif</span>}
+            </div>
+            <p className={`text-xs ${isSelected ? 'text-indigo-100' : 'text-gray-500'} font-medium`}>
+              {student.grade} • {student.classRoom}
+            </p>
+            <div className="pt-2 border-t border-dashed mt-2 border-white/10 space-y-1 text-xs">
+              <div className={`flex items-center gap-1.5 ${isSelected ? 'text-indigo-100' : 'text-gray-500'}`}>
+                <User className="h-3 w-3 shrink-0" />
+                <span className="truncate">Enseignant : <strong className={isSelected ? 'text-white' : 'text-gray-700'}>{student.teacherName}</strong></span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${isSelected ? 'text-indigo-100' : 'text-gray-500'}`}>
+                <Mail className="h-3 w-3 shrink-0" />
+                <span className="truncate">{student.teacherEmail}</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${isSelected ? 'text-indigo-100' : 'text-gray-500'}`}>
+                <Calendar className="h-3 w-3 shrink-0" />
+                <span className="truncate">Né(e) le {new Date(student.dob).toLocaleDateString('fr-FR', { dateStyle: 'long' })}</span>
+              </div>
+            </div>
+
+            {/* Print Action Button */}
+            {isSelected && onPrint && (
+              <div className="pt-3 mt-3 border-t border-white/20">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPrint();
+                  }}
+                  className="bg-white hover:bg-slate-50 text-indigo-700 font-extrabold text-[10.5px] px-3 py-1.5 rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5 transition-all w-full justify-center active:scale-97"
+                  title="Générer un dossier d'élève imprimable"
+                >
+                  <Printer className="h-3.5 w-3.5 shrink-0" />
+                  <span>Imprimer fiche élève</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Modal interface rendered dynamically */}
+      {showCamera && onUpdateStudent && (
+        <StudentCameraModal
+          student={student}
+          isOpen={showCamera}
+          onClose={() => setShowCamera(false)}
+          onUpdate={onUpdateStudent}
+        />
+      )}
+    </>
+  );
+}

@@ -1,0 +1,734 @@
+import React, { useState } from 'react';
+import { 
+  Smartphone, 
+  Mail, 
+  Send, 
+  Copy, 
+  Check, 
+  Users, 
+  Search, 
+  CheckCircle, 
+  ExternalLink, 
+  MessageSquare, 
+  AlertTriangle, 
+  Play, 
+  RefreshCw, 
+  MessageCircle,
+  HelpCircle,
+  Clock,
+  Settings
+} from 'lucide-react';
+import { ApeeParent, ApeeSettings } from '../../types';
+
+interface ApeeRemindersProps {
+  parents: ApeeParent[];
+  settings: ApeeSettings;
+  onSaveParent: (parent: ApeeParent) => Promise<void>;
+}
+
+export default function ApeeReminders({ parents, settings, onSaveParent }: ApeeRemindersProps) {
+  // Overdue parents are those with state 'partiel' or 'retard'
+  const overdueParents = parents.filter(p => p.status === 'partiel' || p.status === 'retard');
+
+  // Search and filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'partiel' | 'retard'>('all');
+  
+  // Custom templates
+  const [smsTemplate, setSmsTemplate] = useState<string>(
+    "Chers parents. Rappel APEE {school_year} de {association_name} pour votre pupille ({student_names}). Le solde restant dû est de {remaining_amount} FCFA. Veuillez régulariser au plus vite par versement ou virement. Merci pour votre collaboration."
+  );
+  
+  const [emailSubject, setEmailSubject] = useState<string>(
+    "Rappel de Paiement Cotisation APEE - {association_name}"
+  );
+  
+  const [emailTemplate, setEmailTemplate] = useState<string>(
+    "Bonjour {parent_name},\n\nNous vous contactons au sujet de la cotisation APEE ({school_year}) pour l'établissement {association_name} quant à la scolarisation de votre/vos enfant(s) : {student_names}.\n\nÀ ce jour, votre compte présente un solde restant de {remaining_amount} FCFA (sur un montant exigible de {total_due_amount} FCFA).\n\nNous vous prions de bien vouloir régulariser cette situation auprès de l'intendante.\n\nSi vous avez déjà procédé au versement, veuillez ignorer ce message.\n\nCordialement,\nLe Bureau de l'APEE\n{association_name}"
+  );
+
+  // Focus parent state
+  const [selectedParentId, setSelectedParentId] = useState<string>(
+    overdueParents.length > 0 ? overdueParents[0].id : ''
+  );
+  const [previewChannel, setPreviewChannel] = useState<'sms' | 'email'>('sms');
+
+  // Multi selection for bulk actions
+  const [selectedParentIds, setSelectedParentIds] = useState<string[]>([]);
+  
+  // Simulating states
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [bulkChannel, setBulkChannel] = useState<'sms' | 'email' | null>(null);
+  const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkLog, setBulkLog] = useState<string[]>([]);
+  const [singleLoadingId, setSingleLoadingId] = useState<string | null>(null);
+
+  // Copied animation trigger
+  const [copiedText, setCopiedText] = useState(false);
+  const [notificationMsg, setNotificationMsg] = useState<{ type: 'success' | 'info'; text: string } | null>(null);
+
+  // Select all or helper functions
+  const activeFocusParent = overdueParents.find(p => p.id === selectedParentId) || overdueParents[0];
+
+  const filteredParents = overdueParents.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          p.phone.includes(searchTerm) || 
+                          p.students.some(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesStatus = selectedStatus === 'all' ? true : p.status === selectedStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Bulk checkboxes
+  const handleToggleSelectParent = (id: string) => {
+    if (selectedParentIds.includes(id)) {
+      setSelectedParentIds(selectedParentIds.filter(pid => pid !== id));
+    } else {
+      setSelectedParentIds([...selectedParentIds, id]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedParentIds.length === filteredParents.length) {
+      setSelectedParentIds([]);
+    } else {
+      setSelectedParentIds(filteredParents.map(p => p.id));
+    }
+  };
+
+  // Helper replacing tags
+  const formatText = (text: string, parent?: ApeeParent) => {
+    if (!parent) return text;
+    const remaining = Math.max(0, parent.totalDue - parent.totalPaid);
+    const kidsList = parent.students.map(s => `${s.name} (${s.classRoom})`).join(', ');
+    
+    return text
+      .replace(/{parent_name}/g, parent.name)
+      .replace(/{association_name}/g, settings.associationName)
+      .replace(/{school_year}/g, settings.schoolYear)
+      .replace(/{student_names}/g, kidsList)
+      .replace(/{remaining_amount}/g, remaining.toLocaleString())
+      .replace(/{total_due_amount}/g, parent.totalDue.toLocaleString());
+  };
+
+  // Trigger copy
+  const handleCopyText = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedText(true);
+    setTimeout(() => setCopiedText(false), 2000);
+    triggerToast('success', 'Texte généré copié dans le presse-papiers.');
+  };
+
+  const triggerToast = (type: 'success' | 'info', text: string) => {
+    setNotificationMsg({ type, text });
+    setTimeout(() => setNotificationMsg(null), 4000);
+  };
+
+  // WhatsApp click handler
+  const cleanPhoneForWhatsApp = (phone: string) => {
+    const cleaned = phone.replace(/[^0-9]/g, '');
+    if (!cleaned.startsWith('237') && cleaned.length === 9) {
+      return '237' + cleaned;
+    }
+    return cleaned;
+  };
+
+  const handleWhatsAppTrigger = (parent: ApeeParent, customMsg?: string) => {
+    const textToSend = customMsg || formatText(smsTemplate, parent);
+    const formattedPhone = cleanPhoneForWhatsApp(parent.phone);
+    if (!formattedPhone) {
+      alert("Numéro de téléphone invalide.");
+      return;
+    }
+    
+    // Log simulated delivery and update database
+    updateLastReminded(parent, 'WhatsApp');
+    
+    // Open in new window
+    const waUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(textToSend)}`;
+    window.open(waUrl, '_blank');
+    triggerToast('success', `Lien WhatsApp ouvert pour ${parent.name}.`);
+  };
+
+  const handleEmailTrigger = (parent: ApeeParent) => {
+    if (!parent.email) {
+      alert(`Veuillez renseigner une adresse email pour M./Mme ${parent.name} via la fiche parent.`);
+      return;
+    }
+    
+    const subject = formatText(emailSubject, parent);
+    const body = formatText(emailTemplate, parent);
+    
+    updateLastReminded(parent, 'Email');
+    
+    const mailtoUrl = `mailto:${parent.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
+    triggerToast('success', `Client mail configuré pour envoyer à ${parent.email}.`);
+  };
+
+  const updateLastReminded = async (parent: ApeeParent, channel: string) => {
+    const timestamp = `${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})} (${channel})`;
+    const updatedParent: ApeeParent = {
+      ...parent,
+      lastReminded: timestamp,
+      updatedAt: new Date().toISOString()
+    };
+    await onSaveParent(updatedParent);
+  };
+
+  // Simulated Single direct SMS/Network sending
+  const handleSimulateSingleSend = async (parent: ApeeParent, channel: 'sms' | 'email') => {
+    setSingleLoadingId(parent.id);
+    // Simulate delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    await updateLastReminded(parent, channel === 'sms' ? 'SMS Direct' : 'Email Direct');
+    setSingleLoadingId(null);
+    triggerToast('success', `Rappel ${channel.toUpperCase()} simulé et délivré à ${parent.name}.`);
+  };
+
+  // Bulk Reminder Run Simulation
+  const handleBulkReminderRun = async (channel: 'sms' | 'email') => {
+    const idsToProcess = selectedParentIds.length > 0 ? selectedParentIds : filteredParents.map(p => p.id);
+    if (idsToProcess.length === 0) {
+      alert("Aucun parent sélectionné pour la relance.");
+      return;
+    }
+
+    if (!confirm(`Voulez-vous lancer la relance groupée (${channel.toUpperCase()}) pour les ${idsToProcess.length} parents sélectionnés?`)) {
+      return;
+    }
+
+    setBulkProcessing(true);
+    setBulkChannel(channel);
+    setBulkProgress(0);
+    setBulkLog([`[Démarrage] Initialisation de la file d'envois groupés... (${channel.toUpperCase()})`]);
+
+    let successCount = 0;
+    for (let i = 0; i < idsToProcess.length; i++) {
+      const pid = idsToProcess[i];
+      const p = overdueParents.find(parent => parent.id === pid);
+      if (!p) continue;
+
+      setBulkLog(prev => [...prev, `[Relance ${i + 1}/${idsToProcess.length}] Traitement de M./Mme ${p.name}...`]);
+      setBulkProgress(Math.round(((i + 1) / idsToProcess.length) * 100));
+      
+      // Simulate network sending
+      await new Promise(resolve => setTimeout(resolve, i === 0 ? 1200 : 800));
+
+      // Check if details are valid
+      if (channel === 'email' && !p.email) {
+        setBulkLog(prev => [...prev, `⚠️ [Échec] Aucun e-mail renseigné pour ${p.name}. Ignoré.`]);
+      } else if (channel === 'sms' && !p.phone) {
+        setBulkLog(prev => [...prev, `⚠️ [Échec] Aucun numéro de téléphone disponible pour ${p.name}. Ignoré.`]);
+      } else {
+        await updateLastReminded(p, channel === 'sms' ? 'Auto SMS' : 'Auto Email');
+        successCount++;
+        setBulkLog(prev => [...prev, `✅ [Succès] Message envoyé avec succès à ${p.name} (${channel === 'sms' ? p.phone : p.email}).`]);
+      }
+    }
+
+    setBulkLog(prev => [...prev, `\n🏁 [Terminé] Processus achevé. ${successCount}/${idsToProcess.length} messages délivrés.`]);
+    setBulkProcessing(false);
+    setSelectedParentIds([]);
+    triggerToast('success', `Relance collective achevée: ${successCount} messages simulés.`);
+  };
+
+  // Financial statistics
+  const totalDueRecoverable = overdueParents.reduce((sum, p) => sum + (p.totalDue - p.totalPaid), 0);
+
+  return (
+    <div id="content_apee_reminders" className="space-y-6">
+      
+      {/* Dynamic Toast Feed */}
+      {notificationMsg && (
+        <div className="fixed bottom-5 right-5 z-50 animate-bounce">
+          <div className={`p-4 rounded-2xl shadow-xl border flex items-center gap-3 text-xs font-semibold ${
+            notificationMsg.type === 'success' 
+              ? 'bg-emerald-950 text-emerald-300 border-emerald-800' 
+              : 'bg-indigo-950 text-indigo-300 border-indigo-800'
+          }`}>
+            <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
+            <span>{notificationMsg.text}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Header section */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-150 pb-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            🔔 Rappels Automatiques & Relances
+          </h2>
+          <p className="text-xs text-gray-500 font-medium">
+            Générez et distribuez des SMS de relance et de courriels d'urgence vers les parents insolvables ou en retard.
+          </p>
+        </div>
+        <div className="mt-2 md:mt-0 flex gap-2">
+          <button
+            onClick={() => handleBulkReminderRun('sms')}
+            className="text-xs px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+          >
+            <Smartphone className="h-3.5 w-3.5" /> Envoi Groupé SMS ({overdueParents.length})
+          </button>
+          <button
+            onClick={() => handleBulkReminderRun('email')}
+            className="text-xs px-3.5 py-2 bg-slate-800 hover:bg-slate-905 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+          >
+            <Mail className="h-3.5 w-3.5" /> Envoi Groupé Email
+          </button>
+        </div>
+      </div>
+
+      {/* Overview Statistics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-red-50 to-orange-50 border border-orange-100 rounded-2xl p-4 flex items-center gap-4">
+          <div className="p-3 bg-red-100 rounded-xl text-red-600">
+            <Users className="h-6 w-6" />
+          </div>
+          <div>
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Parents Non Solvables</h4>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-bold text-red-950">{overdueParents.length}</span>
+              <span className="text-xs text-red-750 font-medium font-sans">
+                ({parents.length > 0 ? ((overdueParents.length / parents.length) * 100).toFixed(0) : 0}% du total)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-amber-50 to-amber-100/40 border border-amber-200/50 rounded-2xl p-4 flex items-center gap-4">
+          <div className="p-3 bg-amber-100 rounded-xl text-amber-600">
+            <AlertTriangle className="h-6 w-6" />
+          </div>
+          <div>
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Montant à Recouvrer</h4>
+            <p className="text-2xl font-bold text-slate-900 font-mono">{totalDueRecoverable.toLocaleString()} <span className="text-xs font-sans font-extrabold">FCFA</span></p>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/40 border border-indigo-200/50 rounded-2xl p-4 flex items-center gap-4">
+          <div className="p-3 bg-indigo-100 rounded-xl text-indigo-600">
+            <Clock className="h-6 w-6" />
+          </div>
+          <div>
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Canaux Intégrés</h4>
+            <p className="text-sm font-bold text-slate-800 mt-1">SMS, WhatsApp Web & Mailto Client Link</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Bulk Progress Panel */}
+      {bulkProcessing && (
+        <div className="bg-slate-900 text-slate-200 p-5 rounded-2xl border border-slate-800 space-y-3 font-mono">
+          <div className="flex justify-between items-center text-xs">
+            <span className="flex items-center gap-2 animate-pulse text-indigo-400 font-bold">
+              <RefreshCw className="h-4 w-4 animate-spin" /> RELANCE COLLECTIVE EN COURS...
+            </span>
+            <span className="text-emerald-400 font-bold">{bulkProgress}%</span>
+          </div>
+          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+            <div 
+              className="bg-indigo-500 h-full transition-all duration-300"
+              style={{ width: `${bulkProgress}%` }}
+            />
+          </div>
+          <div className="bg-black/40 border border-slate-800 p-3 rounded-lg text-[10px] h-32 overflow-y-auto space-y-1 select-none">
+            {bulkLog.map((log, idx) => (
+              <div key={idx}>{log}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Main split work layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        {/* Left Side: Overdue list */}
+        <div className="lg:col-span-5 space-y-4">
+          <div className="bg-white border border-slate-150 rounded-2xl p-4 space-y-4.5 shadow-2xs">
+            
+            {/* Search Filter Head */}
+            <div className="flex flex-col gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Chercher parent, élève ou n°..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:outline-indigo-500"
+                />
+              </div>
+
+              <div className="flex gap-1.5 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatus('all')}
+                  className={`px-3 py-1 rounded-lg font-bold border transition ${
+                    selectedStatus === 'all' 
+                      ? 'bg-slate-100 text-slate-805 border-slate-300' 
+                      : 'text-gray-500 border-transparent hover:bg-slate-50'
+                  }`}
+                >
+                  Tous ({overdueParents.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatus('partiel')}
+                  className={`px-3 py-1 rounded-lg font-bold border transition ${
+                    selectedStatus === 'partiel' 
+                      ? 'bg-amber-100 text-amber-805 border-amber-300' 
+                      : 'text-gray-500 border-transparent hover:bg-slate-50'
+                  }`}
+                >
+                  Versement Partiel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatus('retard')}
+                  className={`px-3 py-1 rounded-lg font-bold border transition ${
+                    selectedStatus === 'retard' 
+                      ? 'bg-red-100 text-red-805 border-red-300' 
+                      : 'text-gray-500 border-transparent hover:bg-slate-50'
+                  }`}
+                >
+                  Retard Total
+                </button>
+              </div>
+            </div>
+
+            {/* List with selection */}
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-[10px] font-bold text-gray-400">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={filteredParents.length > 0 && selectedParentIds.length === filteredParents.length}
+                    onChange={handleSelectAll}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <span>Sélectionner ({selectedParentIds.length})</span>
+                </div>
+                <span>Reste Dû</span>
+              </div>
+
+              {filteredParents.length === 0 ? (
+                <div className="py-8 text-center text-xs text-gray-400">
+                  Aucun parent en retard correspondant.
+                </div>
+              ) : (
+                filteredParents.map((parent) => {
+                  const isFocused = parent.id === selectedParentId;
+                  const isChecked = selectedParentIds.includes(parent.id);
+                  const remaining = parent.totalDue - parent.totalPaid;
+                  
+                  return (
+                    <div 
+                      key={parent.id}
+                      onClick={() => setSelectedParentId(parent.id)}
+                      className={`p-3 rounded-xl border transition duration-150 cursor-pointer flex items-center justify-between gap-3 ${
+                        isFocused 
+                          ? 'bg-indigo-50/55 border-indigo-200' 
+                          : 'bg-white border-slate-100 hover:border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelectParent(parent.id);
+                          }}
+                          className="p-1 hover:bg-slate-100 rounded-lg shrink-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}} // Swallowed, handled by div click
+                            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{parent.name}</p>
+                          <p className="text-[10px] text-gray-500 flex items-center gap-1 font-mono truncate">
+                            <span>{parent.phone}</span>
+                            {parent.email && <span className="text-indigo-400">• {parent.email}</span>}
+                          </p>
+                          {parent.lastReminded ? (
+                            <p className="text-[9px] text-emerald-600 font-semibold mt-0.5 flex items-center gap-0.5">
+                              <CheckCircle className="h-2.5 w-2.5" /> Relancé le: {parent.lastReminded}
+                            </p>
+                          ) : (
+                            <p className="text-[9px] text-gray-400 font-medium mt-0.5">
+                              Pas encore relancé
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-bold text-red-650 font-mono">
+                          {remaining.toLocaleString()}
+                        </span>
+                        <p className={`text-[8px] font-black uppercase mt-0.5 px-1 py-0.5 rounded text-center ${
+                          parent.status === 'soldé' 
+                            ? 'bg-emerald-500 text-white' 
+                            : (parent.status === 'partiel' ? 'bg-amber-500 text-white' : 'bg-red-500 text-white')
+                        }`}>
+                          {parent.status}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Bottom tools selection */}
+            {selectedParentIds.length > 0 && (
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 flex items-center justify-between gap-2.5">
+                <span className="text-[10px] font-bold text-slate-700">{selectedParentIds.length} parents sélectionnés</span>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => handleBulkReminderRun('sms')}
+                    className="text-[9px] px-2 py-1 bg-indigo-600 text-white font-bold rounded-lg flex items-center gap-1 cursor-pointer hover:bg-indigo-700 transition"
+                  >
+                    Relancer par SMS
+                  </button>
+                  <button
+                    onClick={() => handleBulkReminderRun('email')}
+                    className="text-[9px] px-2 py-1 bg-slate-800 text-white font-bold rounded-lg flex items-center gap-1 cursor-pointer hover:bg-slate-900 transition"
+                  >
+                    Relancer par Email
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* Right Side: Preview & Template Settings */}
+        <div className="lg:col-span-7 space-y-6">
+          
+          {/* Templates Configurator Accordion */}
+          <div className="bg-white border border-slate-150 rounded-2xl p-4 md:p-5 shadow-2xs space-y-4">
+            <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+              <Settings className="h-4 w-4 text-indigo-500" /> Modèles de Relances Universels
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                    <Smartphone className="h-3 w-3" /> Template SMS / WhatsApp
+                  </label>
+                  <span className="text-[9px] text-indigo-500 font-semibold">160 car./SMS</span>
+                </div>
+                <textarea
+                  rows={4}
+                  value={smsTemplate}
+                  onChange={(e) => setSmsTemplate(e.target.value)}
+                  className="w-full text-xs font-sans p-2.5 border border-slate-200 rounded-xl focus:outline-indigo-500"
+                  placeholder="Texte du SMS de relance..."
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                  <Mail className="h-3 w-3" /> Objet Email
+                </label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full text-xs font-semibold p-2 border border-slate-200 rounded-xl focus:outline-indigo-500"
+                />
+
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 block mt-2">
+                  <Mail className="h-3 w-3" /> Corps du Message de l'Email
+                </label>
+                <textarea
+                  rows={3}
+                  value={emailTemplate}
+                  onChange={(e) => setEmailTemplate(e.target.value)}
+                  className="w-full text-xs font-sans p-2 border border-slate-200 rounded-xl focus:outline-indigo-500"
+                  placeholder="Texte de l'Email de relance..."
+                />
+              </div>
+            </div>
+
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 text-[10px] text-amber-900 leading-relaxed font-sans">
+              <strong>Variables dynamiques supportées :</strong> Use the tags 
+              <span className="bg-white border border-amber-200 px-1 py-0.2 mx-1 font-mono">{`{parent_name}`}</span>, 
+              <span className="bg-white border border-amber-200 px-1 py-0.2 mx-1 font-mono">{`{student_names}`}</span>, 
+              <span className="bg-white border border-amber-200 px-1 py-0.2 mx-1 font-mono">{`{remaining_amount}`}</span>, 
+              <span className="bg-white border border-amber-200 px-1 py-0.2 mx-1 font-mono">{`{total_due_amount}`}</span>, 
+              <span className="bg-white border border-amber-200 px-1 py-0.2 mx-1 font-mono">{`{school_year}`}</span>, or 
+              <span className="bg-white border border-amber-200 px-1 py-0.2 mx-1 font-mono">{`{association_name}`}</span> to inject automated parent data cleanly.
+            </div>
+          </div>
+
+          {/* Selected Parent Interactive simulation card */}
+          {activeFocusParent ? (
+            <div className="bg-white border border-slate-150 rounded-2xl p-4 md:p-5 shadow-2xs space-y-4">
+              
+              <div className="flex justify-between items-baseline border-b border-slate-100 pb-2">
+                <h3 className="text-xs font-bold text-slate-700 uppercase">
+                  📡 Simulation d'Envoi Direct : {activeFocusParent.name}
+                </h3>
+                <span className="text-[10px] text-gray-500 font-mono font-bold">Reste: {(activeFocusParent.totalDue - activeFocusParent.totalPaid).toLocaleString()} FCFA</span>
+              </div>
+
+              {/* Channel Selector inside card */}
+              <div className="flex border border-slate-200 rounded-xl p-0.5 max-w-xs overflow-hidden bg-slate-50 shadow-3xs">
+                <button
+                  onClick={() => setPreviewChannel('sms')}
+                  className={`flex-1 text-xs py-1.5 px-3 rounded-lg font-bold flex justify-center items-center gap-1 transition ${
+                    previewChannel === 'sms' ? 'bg-white shadow-2xs text-indigo-600' : 'text-slate-650'
+                  }`}
+                >
+                  <Smartphone className="h-3.5 w-3.5" /> SMS / WhatsApp
+                </button>
+                <button
+                  onClick={() => setPreviewChannel('email')}
+                  className={`flex-1 text-xs py-1.5 px-3 rounded-lg font-bold flex justify-center items-center gap-1 transition ${
+                    previewChannel === 'email' ? 'bg-white shadow-2xs text-indigo-600' : 'text-slate-650'
+                  }`}
+                >
+                  <Mail className="h-3.5 w-3.5" /> Email Rappel
+                </button>
+              </div>
+
+              {/* Render dynamic mockup depending on channel choice */}
+              {previewChannel === 'sms' ? (
+                /* SMS simulator preview block */
+                <div className="relative mx-auto max-w-sm rounded-[32px] border-8 border-slate-800 bg-slate-900 p-3 shadow-lg aspect-video h-[230px] flex flex-col justify-between overflow-hidden text-white font-sans select-none">
+                  {/* Smartphone top notches */}
+                  <div className="flex justify-between items-center text-[8px] text-slate-400 font-mono px-1">
+                    <span>12:00 PM</span>
+                    <div className="w-12 h-2.5 bg-black rounded-b-md mx-auto" />
+                    <span className="flex items-center gap-0.5">LTE 🔋</span>
+                  </div>
+
+                  {/* Header profile contact */}
+                  <div className="bg-slate-850/80 p-1.5 rounded-lg border-b border-slate-800 flex items-center justify-center gap-1 md:gap-2 mt-1">
+                    <div className="h-4 w-4 rounded-full bg-indigo-500 flex items-center justify-center text-[7px] font-bold text-white uppercase">
+                      {activeFocusParent.name.slice(0, 1)}
+                    </div>
+                    <span className="text-[9px] font-bold truncate text-slate-200 max-w-[130px]">{activeFocusParent.name}</span>
+                  </div>
+
+                  {/* The interactive message bubble */}
+                  <div className="flex-1 overflow-y-auto py-2 space-y-1 pr-1 custom-scrollbar">
+                    <div className="bg-slate-800 text-[10px] px-2.5 py-1.5 rounded-2xl rounded-tl-sm max-w-[85%] self-start border border-slate-700/60 leading-tight">
+                      <p className="text-white whitespace-pre-line break-words text-[9.5px]">
+                        {formatText(smsTemplate, activeFocusParent)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-[7px] text-center text-slate-400 border-t border-slate-850 pt-1.5 font-mono">
+                    Simulation SMS CES Ekali 1 / Applet Integration
+                  </div>
+                </div>
+              ) : (
+                /* Email Card simulation */
+                <div className="border border-slate-200 rounded-xl bg-slate-50 p-4 space-y-3 font-sans relative overflow-hidden select-none">
+                  <div className="border-b border-slate-200 pb-2 space-y-1">
+                    <div className="text-[10px] flex items-center gap-1.5">
+                      <span className="font-bold text-slate-500">De:</span>
+                      <span className="text-slate-850">APEE CES d'Ekali 1 Mfou (reminders@ces-ekali.edu.cm)</span>
+                    </div>
+                    <div className="text-[10px] flex items-center gap-1.5">
+                      <span className="font-bold text-slate-500">Pour:</span>
+                      <span className="text-indigo-650 font-semibold">{activeFocusParent.email || '(Aucun email enregistré pour ce parent)'}</span>
+                    </div>
+                    <div className="text-[10px] flex items-center gap-1.5 mt-1">
+                      <span className="font-bold text-slate-500">Objet:</span>
+                      <span className="text-slate-800 font-bold">{formatText(emailSubject, activeFocusParent)}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-lg border border-slate-100 text-[10.5px] text-slate-800 whitespace-pre-line leading-relaxed max-h-[160px] overflow-y-auto">
+                    {formatText(emailTemplate, activeFocusParent)}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions launcher */}
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100 justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(formatText(previewChannel === 'sms' ? smsTemplate : emailTemplate, activeFocusParent))}
+                  className="text-xs px-3.5 py-2 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer transition shadow-3xs"
+                >
+                  {copiedText ? <Check className="h-3.5 w-3.5 text-emerald-505" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copiedText ? 'Copié !' : 'Copier'}
+                </button>
+
+                {previewChannel === 'sms' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleWhatsAppTrigger(activeFocusParent)}
+                      className="text-xs px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-3xs transition"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5 shrink-0" />
+                      Relance WhatsApp Web
+                    </button>
+                    <button
+                      type="button"
+                      disabled={singleLoadingId === activeFocusParent.id}
+                      onClick={() => handleSimulateSingleSend(activeFocusParent, 'sms')}
+                      className="text-xs px-3.5 py-2 bg-indigo-600 hover:bg-indigo-750 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-3xs transition disabled:opacity-50"
+                    >
+                      {singleLoadingId === activeFocusParent.id ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Send className="h-3.5 w-3.5" />
+                      )}
+                      Délivrer SMS Réseau (Simulé)
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={!activeFocusParent.email}
+                      onClick={() => handleEmailTrigger(activeFocusParent)}
+                      className="text-xs px-3.5 py-2 bg-slate-800 hover:bg-slate-905 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-3xs transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Ouvrir Client Mail (Outlook/Gmail)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!activeFocusParent.email || singleLoadingId === activeFocusParent.id}
+                      onClick={() => handleSimulateSingleSend(activeFocusParent, 'email')}
+                      className="text-xs px-3.5 py-2 bg-indigo-600 hover:bg-indigo-755 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-3xs transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {singleLoadingId === activeFocusParent.id ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Send className="h-3.5 w-3.5" />
+                      )}
+                      Délivrer E-mail (Simulé)
+                    </button>
+                  </>
+                )}
+              </div>
+
+            </div>
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center text-xs text-slate-400 font-sans">
+              Tous les parents ont réglé leur cotisation APEE ! Aucune relance n'est nécessaire pour le moment.
+            </div>
+          )}
+
+        </div>
+
+      </div>
+
+    </div>
+  );
+}

@@ -1,0 +1,164 @@
+{
+  "entities": {
+    "student": {
+      "title": "Student",
+      "description": "A student profile registered under a parent account.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique student identifier." },
+        "parentId": { "type": "string", "description": "UID of the managing parent" },
+        "name": { "type": "string", "description": "First and last name of the student" },
+        "grade": { "type": "string", "description": "Class grade of the student" },
+        "classRoom": { "type": "string", "description": "Assigned classroom name" },
+        "avatar": { "type": "string", "description": "Emoji or avatar representation" },
+        "teacherName": { "type": "string", "description": "Name of the main teacher" },
+        "teacherEmail": { "type": "string", "description": "Email address of the teacher" },
+        "dob": { "type": "string", "description": "Date of birth of the student" }
+      },
+      "required": ["id", "parentId", "name", "grade", "classRoom", "avatar"]
+    },
+    "grade": {
+      "title": "Grade",
+      "description": "An academic performance grade record for a student in a specific exam.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "parentId": { "type": "string" },
+        "subject": { "type": "string" },
+        "examName": { "type": "string" },
+        "score": { "type": "number" },
+        "maxScore": { "type": "number" },
+        "teacherRemarks": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "studentId", "parentId", "subject", "examName", "score", "maxScore", "date"]
+    },
+    "attendance": {
+      "title": "Attendance",
+      "description": "An attendance logging record for a student on a specific day.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "parentId": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["Present", "Absent", "Late", "Excused"] },
+        "remarks": { "type": "string" }
+      },
+      "required": ["id", "studentId", "parentId", "date", "status"]
+    },
+    "homework": {
+      "title": "Homework",
+      "description": "A homework assignment assigned to the student with status details.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "parentId": { "type": "string" },
+        "subject": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Completed", "Overdue"] },
+        "grade": { "type": "string" }
+      },
+      "required": ["id", "studentId", "parentId", "subject", "title", "dueDate", "status"]
+    },
+    "announcement": {
+      "title": "Announcement",
+      "description": "A general broadcast from administrators or teachers to all parents.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string", "enum": ["General", "Academic", "Event", "Urgent"] },
+        "date": { "type": "string" },
+        "author": { "type": "string" }
+      },
+      "required": ["id", "title", "content", "category", "date"]
+    },
+    "appointment": {
+      "title": "Appointment",
+      "description": "A scheduled Parent-Teacher Consultation meeting.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "parentId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "subject": { "type": "string" },
+        "dateTime": { "type": "string" },
+        "status": { "type": "string", "enum": ["Scheduled", "Completed", "Cancelled"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "studentId", "parentId", "teacherName", "subject", "dateTime", "status"]
+    },
+    "message": {
+      "title": "Message",
+      "description": "A communication message exchange on the platform.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "parentId": { "type": "string" },
+        "senderType": { "type": "string", "enum": ["Parent", "Teacher"] },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "teacherName": { "type": "string" }
+      },
+      "required": ["id", "studentId", "parentId", "senderType", "content", "timestamp"]
+    },
+    "invoice": {
+      "title": "Invoice",
+      "description": "A school fee billing invoice document.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "parentId": { "type": "string" },
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "dueDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["Paid", "Unpaid", "Overdue"] },
+        "paymentDate": { "type": "string" }
+      },
+      "required": ["id", "studentId", "parentId", "title", "amount", "dueDate", "status"]
+    }
+  },
+  "firestore": {
+    "students": {
+      "schema": "student",
+      "description": "Collection of student profiles."
+    },
+    "grades": {
+      "schema": "grade",
+      "description": "Academic grade history entries."
+    },
+    "attendance": {
+      "schema": "attendance",
+      "description": "Attendance history logging."
+    },
+    "homeworks": {
+      "schema": "homework",
+      "description": "Assigned homework pieces tracker."
+    },
+    "announcements": {
+      "schema": "announcement",
+      "description": "School announcement broadcasts."
+    },
+    "appointments": {
+      "schema": "appointment",
+      "description": "Parent-Teacher meeting scheduling data."
+    },
+    "messages": {
+      "schema": "message",
+      "description": "Messages historical index."
+    },
+    "invoices": {
+      "schema": "invoice",
+      "description": "Tuition fees and billing ledger."
+    }
+  }
+}

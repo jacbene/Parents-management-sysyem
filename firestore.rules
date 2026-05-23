@@ -1,0 +1,187 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Deny all by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(parentId) {
+      return isSignedIn() && parentId == request.auth.uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // Entity validator functions
+    function isValidStudent(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.parentId is string && data.parentId == request.auth.uid
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && data.grade is string && data.grade.size() <= 50
+          && data.classRoom is string && data.classRoom.size() <= 50
+          && data.avatar is string && data.avatar.size() <= 10;
+    }
+
+    function isValidGrade(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.studentId is string && data.studentId.size() <= 128
+          && data.parentId is string && data.parentId == request.auth.uid
+          && data.subject is string && data.subject.size() <= 100
+          && data.examName is string && data.examName.size() <= 100
+          && data.score is number && data.score >= 0 && data.score <= 1000
+          && data.maxScore is number && data.maxScore > 0
+          && (data.teacherRemarks is string ? data.teacherRemarks.size() <= 1000 : true)
+          && data.date is string;
+    }
+
+    function isValidAttendance(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.studentId is string && data.studentId.size() <= 128
+          && data.parentId is string && data.parentId == request.auth.uid
+          && data.date is string
+          && data.status is string && (data.status == 'Present' || data.status == 'Absent' || data.status == 'Late' || data.status == 'Excused')
+          && (data.remarks is string ? data.remarks.size() <= 1000 : true);
+    }
+
+    function isValidHomework(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.studentId is string && data.studentId.size() <= 128
+          && data.parentId is string && data.parentId == request.auth.uid
+          && data.subject is string && data.subject.size() <= 100
+          && data.title is string && data.title.size() <= 200
+          && (data.description is string ? data.description.size() <= 2000 : true)
+          && data.dueDate is string
+          && data.status is string && (data.status == 'Pending' || data.status == 'Completed' || data.status == 'Overdue')
+          && (data.grade is string ? data.grade.size() <= 50 : true);
+    }
+
+    function isValidAnnouncement(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.title is string && data.title.size() <= 200
+          && data.content is string && data.content.size() <= 5000
+          && data.category is string && (data.category == 'General' || data.category == 'Academic' || data.category == 'Event' || data.category == 'Urgent')
+          && data.date is string
+          && (data.author is string ? data.author.size() <= 100 : true);
+    }
+
+    function isValidAppointment(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.studentId is string && data.studentId.size() <= 128
+          && data.parentId is string && data.parentId == request.auth.uid
+          && data.teacherName is string && data.teacherName.size() <= 100
+          && data.subject is string && data.subject.size() <= 100
+          && data.dateTime is string
+          && data.status is string && (data.status == 'Scheduled' || data.status == 'Completed' || data.status == 'Cancelled')
+          && (data.notes is string ? data.notes.size() <= 1000 : true);
+    }
+
+    function isValidMessage(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.studentId is string && data.studentId.size() <= 128
+          && data.parentId is string && data.parentId == request.auth.uid
+          && data.senderType is string && (data.senderType == 'Parent' || data.senderType == 'Teacher')
+          && data.content is string && data.content.size() <= 2000
+          && data.timestamp is string
+          && (data.teacherName is string ? data.teacherName.size() <= 100 : true);
+    }
+
+    function isValidInvoice(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.studentId is string && data.studentId.size() <= 128
+          && data.parentId is string && data.parentId == request.auth.uid
+          && data.title is string && data.title.size() <= 200
+          && data.amount is number
+          && data.dueDate is string
+          && data.status is string && (data.status == 'Paid' || data.status == 'Unpaid' || data.status == 'Overdue')
+          && (data.paymentDate is string ? data.paymentDate.size() <= 100 : true);
+    }
+
+    // --- Students Collection ---
+    match /students/{studentId} {
+      allow get: if isSignedIn() && isOwner(resource.data.parentId);
+      allow list: if isSignedIn() && resource.data.parentId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(studentId) && isValidStudent(incoming());
+      allow update: if isSignedIn() && isOwner(resource.data.parentId) && isValidStudent(incoming())
+                       && incoming().parentId == resource.data.parentId && incoming().id == resource.data.id;
+      allow delete: if isSignedIn() && isOwner(resource.data.parentId);
+    }
+
+    // --- Grades Collection ---
+    match /grades/{gradeId} {
+      allow get: if isSignedIn() && isOwner(resource.data.parentId);
+      allow list: if isSignedIn() && resource.data.parentId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(gradeId) && isValidGrade(incoming());
+      allow update: if isSignedIn() && isOwner(resource.data.parentId) && isValidGrade(incoming())
+                       && incoming().parentId == resource.data.parentId && incoming().studentId == resource.data.studentId && incoming().id == resource.data.id;
+      allow delete: if isSignedIn() && isOwner(resource.data.parentId);
+    }
+
+    // --- Attendance Collection ---
+    match /attendance/{attendanceId} {
+      allow get: if isSignedIn() && isOwner(resource.data.parentId);
+      allow list: if isSignedIn() && resource.data.parentId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(attendanceId) && isValidAttendance(incoming());
+      allow update: if isSignedIn() && isOwner(resource.data.parentId) && isValidAttendance(incoming())
+                       && incoming().parentId == resource.data.parentId && incoming().studentId == resource.data.studentId && incoming().id == resource.data.id;
+      allow delete: if isSignedIn() && isOwner(resource.data.parentId);
+    }
+
+    // --- Homeworks Collection ---
+    match /homeworks/{homeworkId} {
+      allow get: if isSignedIn() && isOwner(resource.data.parentId);
+      allow list: if isSignedIn() && resource.data.parentId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(homeworkId) && isValidHomework(incoming());
+      allow update: if isSignedIn() && isOwner(resource.data.parentId) && isValidHomework(incoming())
+                       && incoming().parentId == resource.data.parentId && incoming().studentId == resource.data.studentId && incoming().id == resource.data.id;
+      allow delete: if isSignedIn() && isOwner(resource.data.parentId);
+    }
+
+    // --- Announcements Collection ---
+    match /announcements/{announcementId} {
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if false; // System-only or Server-only writes. Parents cannot write announcements.
+    }
+
+    // --- Appointments Collection ---
+    match /appointments/{appointmentId} {
+      allow get: if isSignedIn() && isOwner(resource.data.parentId);
+      allow list: if isSignedIn() && resource.data.parentId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(appointmentId) && isValidAppointment(incoming());
+      allow update: if isSignedIn() && isOwner(resource.data.parentId) && isValidAppointment(incoming())
+                       && incoming().parentId == resource.data.parentId && incoming().studentId == resource.data.studentId && incoming().id == resource.data.id;
+      allow delete: if isSignedIn() && isOwner(resource.data.parentId);
+    }
+
+    // --- Messages Collection ---
+    match /messages/{messageId} {
+      allow get: if isSignedIn() && isOwner(resource.data.parentId);
+      allow list: if isSignedIn() && resource.data.parentId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(messageId) && isValidMessage(incoming());
+      allow update: if isSignedIn() && isOwner(resource.data.parentId) && isValidMessage(incoming())
+                       && incoming().parentId == resource.data.parentId && incoming().studentId == resource.data.studentId && incoming().id == resource.data.id;
+      allow delete: if isSignedIn() && isOwner(resource.data.parentId);
+    }
+
+    // --- Invoices Collection ---
+    match /invoices/{invoiceId} {
+      allow get: if isSignedIn() && isOwner(resource.data.parentId);
+      allow list: if isSignedIn() && resource.data.parentId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(invoiceId) && isValidInvoice(incoming());
+      allow update: if isSignedIn() && isOwner(resource.data.parentId) && isValidInvoice(incoming())
+                       && incoming().parentId == resource.data.parentId && incoming().studentId == resource.data.studentId && incoming().id == resource.data.id;
+      allow delete: if isSignedIn() && isOwner(resource.data.parentId);
+    }
+  }
+}

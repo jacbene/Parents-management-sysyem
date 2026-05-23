@@ -1,0 +1,153 @@
+export interface Student {
+  id: string;
+  parentId: string;
+  name: string;
+  grade: string;
+  classRoom: string;
+  avatar: string;
+  teacherName: string;
+  teacherEmail: string;
+  dob: string;
+}
+
+export interface Grade {
+  id: string;
+  studentId: string;
+  parentId: string;
+  subject: string;
+  examName: string;
+  score: number;
+  maxScore: number;
+  teacherRemarks: string;
+  date: string;
+}
+
+export type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused';
+
+export interface Attendance {
+  id: string;
+  studentId: string;
+  parentId: string;
+  date: string;
+  status: AttendanceStatus;
+  remarks?: string;
+}
+
+export type HomeworkStatus = 'Pending' | 'Completed' | 'Overdue';
+
+export interface Homework {
+  id: string;
+  studentId: string;
+  parentId: string;
+  subject: string;
+  title: string;
+  description?: string;
+  dueDate: string;
+  status: HomeworkStatus;
+  grade?: string;
+}
+
+export type AnnouncementCategory = 'General' | 'Academic' | 'Event' | 'Urgent';
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  category: AnnouncementCategory;
+  date: string;
+  author: string;
+}
+
+export type AppointmentStatus = 'Scheduled' | 'Completed' | 'Cancelled';
+
+export interface Appointment {
+  id: string;
+  studentId: string;
+  parentId: string;
+  teacherName: string;
+  subject: string;
+  dateTime: string;
+  status: AppointmentStatus;
+  notes?: string;
+}
+
+export interface Message {
+  id: string;
+  studentId: string;
+  parentId: string;
+  senderType: 'Parent' | 'Teacher';
+  content: string;
+  timestamp: string;
+  teacherName?: string;
+}
+
+export type InvoiceStatus = 'Paid' | 'Unpaid' | 'Overdue';
+
+export interface Invoice {
+  id: string;
+  studentId: string;
+  parentId: string;
+  title: string;
+  amount: number;
+  dueDate: string;
+  status: InvoiceStatus;
+  paymentDate?: string;
+  // Custom APEE fields stored within Invoice shape
+  phone?: string;
+  address?: string;
+  email?: string;
+  lastReminded?: string;
+  note?: string;
+  amountPaid?: number;
+  studentsList?: string; // Serialized JSON list of pupils: {name, classRoom}
+  paymentsHistory?: string; // Serialized JSON list of payment items
+  expenseType?: string; // For expense records
+  description?: string; // Detail description
+}
+
+export interface ApeeStudentLink {
+  name: string;
+  classRoom: string;
+}
+
+export interface ApeePaymentItem {
+  id: string;
+  amount: number;
+  date: string;
+  note?: string;
+}
+
+export interface ApeeParent {
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  email?: string;
+  lastReminded?: string;
+  students: ApeeStudentLink[];
+  totalDue: number;
+  totalPaid: number;
+  status: 'soldé' | 'partiel' | 'retard';
+  note: string;
+  payments: ApeePaymentItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApeeExpense {
+  id: string;
+  type: 'command' | 'payment-order' | 'refund';
+  title: string;
+  amount: number;
+  status: 'Pending' | 'Approved' | 'Executed';
+  date: string;
+  description: string;
+}
+
+export interface ApeeSettings {
+  associationName: string;
+  schoolYear: string;
+  cotisationAmount: number;
+  financialGoal: number;
+}
+
