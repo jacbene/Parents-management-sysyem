@@ -17,7 +17,7 @@ export default function ApeeReporting({ parents, settings }: ApeeReportingProps)
 
   // Filter payments list based on active dates
   const getFilteredPayments = () => {
-    const list: { parentName: string; parentPhone: string; amount: number; date: string; note?: string }[] = [];
+    const list: { parentName: string; parentPhone: string; amount: number; date: string; method?: string; note?: string }[] = [];
     
     parents.forEach(p => {
       p.payments.forEach(pay => {
@@ -42,6 +42,7 @@ export default function ApeeReporting({ parents, settings }: ApeeReportingProps)
             parentPhone: p.phone,
             amount: pay.amount,
             date: pay.date,
+            method: pay.method,
             note: pay.note,
           });
         }
@@ -100,9 +101,9 @@ export default function ApeeReporting({ parents, settings }: ApeeReportingProps)
 
   // Copy values as tab-separated values ready for Excel/Spreadsheets
   const handleCopyTsv = () => {
-    let tsv = 'Date\tNom Parent\tTéléphone\tMontant Versé (FCFA)\tObservations\n';
+    let tsv = 'Date\tNom Parent\tTéléphone\tMoyen de paiement\tMontant Versé (FCFA)\tObservations\n';
     filteredPayments.forEach(p => {
-      tsv += `${p.date}\t${p.parentName}\t${p.parentPhone}\t${p.amount}\t${p.note || ''}\n`;
+      tsv += `${p.date}\t${p.parentName}\t${p.parentPhone}\t${p.method || 'Espèces'}\t${p.amount}\t${p.note || ''}\n`;
     });
 
     navigator.clipboard.writeText(tsv).then(() => {
@@ -253,6 +254,7 @@ export default function ApeeReporting({ parents, settings }: ApeeReportingProps)
                 <tr className="bg-slate-50 border-b border-slate-100 text-gray-505 font-bold uppercase text-[9px] tracking-wider select-none">
                   <th className="py-2 px-2">Date</th>
                   <th className="py-2 px-2">Parent d'Élève</th>
+                  <th className="py-2 px-2">Moyen</th>
                   <th className="py-2 px-2 text-right">Montant</th>
                   <th className="py-2 px-2">Observations</th>
                 </tr>
@@ -260,7 +262,7 @@ export default function ApeeReporting({ parents, settings }: ApeeReportingProps)
               <tbody className="divide-y divide-slate-100">
                 {filteredPayments.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="py-6 text-center text-gray-400 text-[11px] font-medium leading-relaxed">
+                    <td colSpan={5} className="py-6 text-center text-gray-400 text-[11px] font-medium leading-relaxed">
                       Aucune transaction financière n'a été enregistrée durant cette période.
                     </td>
                   </tr>
@@ -269,6 +271,11 @@ export default function ApeeReporting({ parents, settings }: ApeeReportingProps)
                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                       <td className="py-2 px-2 font-mono text-gray-450">{p.date}</td>
                       <td className="py-2 px-2 font-semibold text-slate-800">{p.parentName}</td>
+                      <td className="py-2 px-2">
+                        <span className="text-[9px] font-sans font-extrabold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                          {p.method || 'Espèces'}
+                        </span>
+                      </td>
                       <td className="py-2 px-2 text-right font-mono font-bold text-emerald-600">{p.amount.toLocaleString()} FCFA</td>
                       <td className="py-2 px-2 text-gray-500 text-[10px] truncate max-w-[150px]">{p.note || '-'}</td>
                     </tr>

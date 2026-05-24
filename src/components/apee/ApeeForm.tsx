@@ -19,12 +19,28 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
   
   // Payment states
   const [payAmount, setPayAmount] = useState<number>(0);
+  const [payMethod, setPayMethod] = useState<string>('Espèces');
   const [paymentNote, setPaymentNote] = useState('');
   const [payments, setPayments] = useState<ApeePaymentItem[]>([]);
+  const [transactionId, setTransactionId] = useState('');
+  const [provider, setProvider] = useState('MTN');
   
   // Alert visual confirmations
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [smsMockMsg, setSmsMockMsg] = useState<string | null>(null);
+
+  // Sync provider selection when payment method changes
+  useEffect(() => {
+    if (payMethod === 'Orange Money') {
+      setProvider('Orange');
+    } else if (payMethod === 'MTN Mobile Money') {
+      setProvider('MTN');
+    } else if (payMethod === 'Wave') {
+      setProvider('Wave');
+    } else if (payMethod === 'Moov Money') {
+      setProvider('Moov');
+    }
+  }, [payMethod]);
 
   useEffect(() => {
     if (activeParentToEdit) {
@@ -37,6 +53,8 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
       setPayments(activeParentToEdit.payments);
       // Default payment input to 0 in edit mode
       setPayAmount(0);
+      setTransactionId('');
+      setProvider('MTN');
     } else {
       clearForm();
     }
@@ -52,6 +70,9 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
     setPayments([]);
     setPayAmount(0);
     setPaymentNote('');
+    setPayMethod('Espèces');
+    setTransactionId('');
+    setProvider('MTN');
   };
 
   const handleAddStudent = () => {
@@ -78,15 +99,26 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
 
   const handleAddPaymentNode = () => {
     if (payAmount <= 0) return;
+    
+    const isDigitalMethod = ['Orange Money', 'MTN Mobile Money', 'Wave', 'Moov Money', 'Virement'].includes(payMethod);
+    if (isDigitalMethod && !transactionId.trim()) {
+      alert("Veuillez renseigner le numéro de transaction pour les paiements numériques.");
+      return;
+    }
+
     const newPayment: ApeePaymentItem = {
       id: 'pay_' + Date.now(),
       amount: payAmount,
       date: new Date().toISOString().slice(0, 10),
       note: paymentNote.trim() || undefined,
+      method: payMethod,
+      transactionId: isDigitalMethod ? transactionId.trim() : undefined,
+      provider: isDigitalMethod ? provider : undefined,
     };
     setPayments([...payments, newPayment]);
     setPayAmount(0);
     setPaymentNote('');
+    setTransactionId('');
     setSuccessMsg('Versement validé et ajouté à la liste !');
     setTimeout(() => setSuccessMsg(null), 3500);
   };
@@ -111,11 +143,19 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
     // Incorporate current active payment input if entered but not clicked add
     const finalPayments = [...payments];
     if (payAmount > 0) {
+      const isDigitalMethod = ['Orange Money', 'MTN Mobile Money', 'Wave', 'Moov Money', 'Virement'].includes(payMethod);
+      if (isDigitalMethod && !transactionId.trim()) {
+        alert("Veuillez renseigner le numéro de transaction pour les paiements numériques.");
+        return;
+      }
       finalPayments.push({
         id: 'pay_' + Date.now(),
         amount: payAmount,
         date: new Date().toISOString().slice(0, 10),
         note: paymentNote.trim() || 'Versement direct à l\'enregistrement',
+        method: payMethod,
+        transactionId: isDigitalMethod ? transactionId.trim() : undefined,
+        provider: isDigitalMethod ? provider : undefined,
       });
     }
 
@@ -410,11 +450,11 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
               <Plus className="h-4 w-4 text-indigo-500" /> Enregistrer un Versement (Acompte)
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-600">Montant versé (FCFA)</label>
                 <div className="relative">
-                  <span className="absolute left-2 text-xs top-2 font-mono text-gray-505">FCFA</span>
+                  <span className="absolute left-2 text-xs top-2 font-mono text-gray-550">FCFA</span>
                   <input
                     type="number"
                     min="0"
@@ -427,7 +467,24 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-600">Libellé / Note versement</label>
+                <label className="text-[10px] font-bold text-slate-600">Moyen de paiement</label>
+                <select
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value)}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 bg-white cursor-pointer text-slate-700"
+                >
+                  <option value="Espèces">💵 Espèces (Physique)</option>
+                  <option value="Orange Money">🍊 Orange Money</option>
+                  <option value="MTN Mobile Money">💛 MTN Mobile Money</option>
+                  <option value="Wave">🌊 Wave</option>
+                  <option value="Moov Money">🟢 Moov Money</option>
+                  <option value="Chèque">✍️ Chèque</option>
+                  <option value="Virement">🏦 Virement</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-600">Libellé / Note</label>
                 <input
                   type="text"
                   placeholder="Ex: Acompte 1"
@@ -437,6 +494,37 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
                 />
               </div>
             </div>
+
+            {/* Custom transaction metadata inputs */}
+            {['Orange Money', 'MTN Mobile Money', 'Wave', 'Moov Money', 'Virement'].includes(payMethod) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100/40 mt-1">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-indigo-900 uppercase">Fournisseur de services <span className="text-red-500">*</span></label>
+                  <select
+                    value={provider}
+                    onChange={(e) => setProvider(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs border border-indigo-200 focus:border-indigo-500 rounded-lg bg-white cursor-pointer font-semibold text-indigo-950"
+                  >
+                    <option value="MTN">💛 MTN Mobile Money</option>
+                    <option value="Orange">🍊 Orange Money</option>
+                    <option value="Wave">🌊 Wave</option>
+                    <option value="Moov">🟢 Moov Money</option>
+                    <option value="Autre">🏦 Autre / Banque de transfert</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-indigo-900 uppercase">Numéro de transaction <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    required={payAmount > 0}
+                    placeholder="Référence de transaction"
+                    value={transactionId}
+                    onChange={(e) => setTransactionId(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs border border-indigo-200 focus:border-indigo-500 rounded-lg text-slate-900"
+                  />
+                </div>
+              </div>
+            )}
 
             {payAmount > 0 && (
               <button
@@ -456,10 +544,20 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
                   {payments.map((p, pIdx) => (
                     <div key={p.id || pIdx} className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-150 flex justify-between items-center text-xs">
                       <div>
-                        <div className="font-bold text-slate-800">{p.amount.toLocaleString()} FCFA</div>
-                        <div className="text-[9px] text-gray-400 flex items-center gap-1">
+                        <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>{p.amount.toLocaleString()} FCFA</span>
+                          <span className="text-[8px] font-sans font-extrabold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            {p.method || 'Espèces'}
+                          </span>
+                        </div>
+                        <div className="text-[9px] text-gray-400 flex items-center gap-1 mt-0.5">
                           <Calendar className="h-2.5 w-2.5" /> {p.date} {p.note && `(${p.note})`}
                         </div>
+                        {p.transactionId && (
+                          <div className="text-[9px] text-indigo-700 bg-indigo-50/50 rounded-md px-1.5 py-0.5 font-mono inline-block mt-1 border border-indigo-100/40">
+                            Tx: <span className="font-bold">{p.transactionId}</span> ({p.provider || 'N/A'})
+                          </div>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -577,7 +675,11 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
           <div className="mt-4 text-[10px] space-y-1">
             <p className="font-bold underline uppercase">Historique Complet des Versements :</p>
             {payments.map((p, idx) => (
-              <p key={idx}>• {p.date} : {p.amount.toLocaleString()} FCFA {p.note && `(${p.note})`}</p>
+              <p key={idx}>
+                • {p.date} : {p.amount.toLocaleString()} FCFA ({p.method || 'Espèces'}) 
+                {p.transactionId ? ` [Tx: ${p.transactionId} - ${p.provider || 'N/A'}]` : ''} 
+                {p.note ? ` - ${p.note}` : ''}
+              </p>
             ))}
           </div>
         )}

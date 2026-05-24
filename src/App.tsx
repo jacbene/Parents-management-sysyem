@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, loginWithGoogle, logout, db, handleFirestoreError, OperationType, loginAnonymously } from './firebase';
 import { isDatabaseSeeded, seedUserData } from './seeder';
-import { Student, Grade, Attendance, Homework, Appointment, Message, Invoice, ApeeParent, ApeeExpense, ApeeSettings } from './types';
+import { Student, Grade, Attendance, Homework, Appointment, Message, Invoice, ApeeParent, ApeeExpense, ApeeSettings, Announcement, AnnouncementCategory } from './types';
 
 // APEE Utilities and Components
 import {
@@ -39,6 +39,7 @@ import BillingPortal from './components/BillingPortal';
 import AppointmentsScheduler from './components/AppointmentsScheduler';
 import MessageInbox from './components/MessageInbox';
 import StudentPrintModal from './components/StudentPrintModal';
+import PortalOnboarding from './components/PortalOnboarding';
 
 // Icons
 import {
@@ -92,8 +93,20 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isIframe, setIsIframe] = useState(false);
 
-  // Nav tab control (Default to APEE Dashboard)
-  const [activeTab, setActiveTab] = useState<TabType>('apee_dashboard');
+  // Establishment and role-based access state (with persistence)
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(() => localStorage.getItem('portal_selected_school_id'));
+  const [portalUserRole, setPortalUserRole] = useState<'manager' | 'parent' | null>(() => localStorage.getItem('portal_user_role') as 'manager' | 'parent' | null);
+  const [portalParentDetails, setPortalParentDetails] = useState<{ name: string; phone: string; studentSubsetNames?: string[] } | null>(() => {
+    const s = localStorage.getItem('portal_parent_details');
+    return s ? JSON.parse(s) : null;
+  });
+
+  // Nav tab control
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const role = localStorage.getItem('portal_user_role');
+    return role === 'parent' ? 'announcements' : 'apee_dashboard';
+  });
+  
   const [showCookieBanner, setShowCookieBanner] = useState(false);
 
   useEffect(() => {
@@ -103,11 +116,116 @@ export default function App() {
     }
   }, []);
 
+  const handleSelectSchool = (schoolId: string, role: 'manager' | 'parent', parentDetails?: { name: string; phone: string; studentSubsetNames?: string[] }) => {
+    localStorage.setItem('portal_selected_school_id', schoolId);
+    localStorage.setItem('portal_user_role', role);
+    if (parentDetails) {
+      localStorage.setItem('portal_parent_details', JSON.stringify(parentDetails));
+      setPortalParentDetails(parentDetails);
+    } else {
+      localStorage.removeItem('portal_parent_details');
+      setPortalParentDetails(null);
+    }
+    
+    setSelectedSchoolId(schoolId);
+    setPortalUserRole(role);
+    setActiveTab(role === 'parent' ? 'announcements' : 'apee_dashboard');
+  };
+
+  const handleExitSchool = () => {
+    localStorage.removeItem('portal_selected_school_id');
+    localStorage.removeItem('portal_user_role');
+    localStorage.removeItem('portal_parent_details');
+    setSelectedSchoolId(null);
+    setPortalUserRole(null);
+    setPortalParentDetails(null);
+  };
+
   // APEE App State
   const [apeeSettings, setApeeSettings] = useState<ApeeSettings>(DEFAULT_SETTINGS);
   const [apeeParents, setApeeParents] = useState<ApeeParent[]>([]);
   const [apeeExpenses, setApeeExpenses] = useState<ApeeExpense[]>([]);
   const [activeParentToEdit, setActiveParentToEdit] = useState<ApeeParent | null>(null);
+
+  const [isApeeAuthorized, setIsApeeAuthorized] = useState(false);
+
+  const checkApeeAuthorization = (): boolean => {
+    if (portalUserRole === 'parent') {
+      alert("Accès refusé: Votre profil Parent ne vous autorise pas à modifier les données financières administratives.");
+      return false;
+    }
+    if (!apeeSettings.finManagerPassword) {
+      return true; // No password configured, actions are free
+    }
+    if (isApeeAuthorized) {
+      return true; // Already unlocked for this session
+    }
+    
+    // Prompt for password
+    const password = prompt(`Action sécurisée par le Responsable Financier. Saisissez le mot de passe d'accès pour continuer :`);
+    if (password === null) return false;
+    if (password === apeeSettings.finManagerPassword) {
+      setIsApeeAuthorized(true);
+      return true;
+    } else {
+      alert("Mot de passe incorrect. Action d'écriture annulée.");
+      return false;
+    }
+  };
+
+  const handlePromptUnlockApee = () => {
+    if (!apeeSettings.finManagerPassword) {
+      setIsApeeAuthorized(true);
+      return;
+    }
+    const password = prompt(`Entrez le mot de passe du Responsable Financier (${apeeSettings.finManagerName || "Gérant"}) :`);
+    if (password === null) return;
+    if (password === apeeSettings.finManagerPassword) {
+      setIsApeeAuthorized(true);
+    } else {
+      alert("Mot de passe incorrect.");
+    }
+  };
+
+  const [isPedAuthorized, setIsPedAuthorized] = useState(false);
+
+  const checkPedAuthorization = (): boolean => {
+    if (portalUserRole === 'parent') {
+      alert("Accès refusé: Votre profil Parent ne vous autorise pas à modifier les données administratives et académiques.");
+      return false;
+    }
+    if (!apeeSettings.pedManagerPassword) {
+      return true; // No password configured, actions are free
+    }
+    if (isPedAuthorized) {
+      return true; // Already unlocked for this session
+    }
+    
+    // Prompt for password
+    const password = prompt(`Action sécurisée par le Responsable Pédagogique (${apeeSettings.pedManagerName || "Surveillant/Censeur"}). Saisissez le mot de passe pour continuer :`);
+    if (password === null) return false;
+    if (password === apeeSettings.pedManagerPassword) {
+      setIsPedAuthorized(true);
+      return true;
+    } else {
+      alert("Mot de passe incorrect. Action d'écriture annulée.");
+      return false;
+    }
+  };
+
+  const handlePromptUnlockPed = () => {
+    if (!apeeSettings.pedManagerPassword) {
+      setIsPedAuthorized(true);
+      return;
+    }
+    const password = prompt(`Entrez le mot de passe du Responsable Pédagogique (${apeeSettings.pedManagerName || "Surveillant/Censeur"}) :`);
+    if (password === null) return;
+    if (password === apeeSettings.pedManagerPassword) {
+      setIsPedAuthorized(true);
+    } else {
+      alert("Mot de passe incorrect.");
+    }
+  };
 
   // Firestore App State
   const [students, setStudents] = useState<Student[]>([]);
@@ -119,9 +237,20 @@ export default function App() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
-  // Selected student entity helper
-  const activeStudent = students.find(s => s.id === selectedStudentId) || students[0];
+  // Filter students based on Parent authorized subset for Visitor role
+  const filteredStudents = students.filter(s => {
+    if (portalUserRole === 'parent' && portalParentDetails?.studentSubsetNames) {
+      const allowedNames = portalParentDetails.studentSubsetNames.map(name => name.toLowerCase().trim());
+      return allowedNames.includes(s.name.toLowerCase().trim()) || 
+             allowedNames.some(allowed => s.name.toLowerCase().trim().includes(allowed) || allowed.includes(s.name.toLowerCase().trim()));
+    }
+    return true;
+  });
+
+  // Selected student entity helper (using filtered list)
+  const activeStudent = filteredStudents.find(s => s.id === selectedStudentId) || filteredStudents[0];
 
   // 1. Listen for Authentication changes
   useEffect(() => {
@@ -133,8 +262,8 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Fetch and seed database state based on Authenticated Primitive userId
-  const userId = user?.uid;
+  // 2. Fetch and seed database state based on Selected School or logged-in account (Unified ID space)
+  const userId = selectedSchoolId || user?.uid;
   useEffect(() => {
     if (!userId) {
       // Clear local states on sign out
@@ -146,6 +275,7 @@ export default function App() {
       setAppointments([]);
       setMessages([]);
       setInvoices([]);
+      setAnnouncements([]);
       
       // Clear APEE states
       setApeeSettings(DEFAULT_SETTINGS);
@@ -158,12 +288,15 @@ export default function App() {
     const initAndFetchData = async () => {
       setDataLoading(true);
       try {
-        // A. Verify if database has seeded profiles for this account
-        const seeded = await isDatabaseSeeded(userId);
-        if (!seeded) {
-          setSeeding(true);
-          await seedUserData(userId);
-          setSeeding(false);
+        // A. Verify if database has seeded profiles for this account space (demo schools pre-seeded dynamically)
+        const isDemoSchool = userId.startsWith('demo_school_');
+        if (!isDemoSchool) {
+          const seeded = await isDatabaseSeeded(userId);
+          if (!seeded) {
+            setSeeding(true);
+            await seedUserData(userId);
+            setSeeding(false);
+          }
         }
 
         // B. Fetch all related collections under parentId
@@ -194,6 +327,7 @@ export default function App() {
       const appointmentQuery = query(collection(db, 'appointments'), where('parentId', '==', uid));
       const messageQuery = query(collection(db, 'messages'), where('parentId', '==', uid));
       const invoiceQuery = query(collection(db, 'invoices'), where('parentId', '==', uid));
+      const announcementQuery = query(collection(db, 'announcements'), where('parentId', '==', uid));
 
       // Resolve sequentially with custom handles
       const [
@@ -203,7 +337,8 @@ export default function App() {
         homeworkSnapshot,
         appointmentSnapshot,
         messageSnapshot,
-        invoiceSnapshot
+        invoiceSnapshot,
+        announcementSnapshot
       ] = await Promise.all([
         getDocs(studentQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'students')),
         getDocs(gradeQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'grades')),
@@ -211,7 +346,8 @@ export default function App() {
         getDocs(homeworkQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'homeworks')),
         getDocs(appointmentQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'appointments')),
         getDocs(messageQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'messages')),
-        getDocs(invoiceQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'invoices'))
+        getDocs(invoiceQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'invoices')),
+        getDocs(announcementQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'announcements'))
       ]);
 
       // Map back collections safely
@@ -240,6 +376,9 @@ export default function App() {
       if (invoiceSnapshot) {
         setInvoices(invoiceSnapshot.docs.map(doc => doc.data() as Invoice));
       }
+      if (announcementSnapshot) {
+        setAnnouncements(announcementSnapshot.docs.map(doc => doc.data() as Announcement));
+      }
     } catch (error) {
       console.error("Critical fetching issue occurred:", error);
     }
@@ -266,8 +405,117 @@ export default function App() {
     setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
   };
 
+  // Pedagogical & Academic Action Handlers (strictly authorized under checkPedAuthorization)
+  const handleAddGrade = async (grade: Grade) => {
+    if (!checkPedAuthorization()) return false;
+    setGrades(prev => [grade, ...prev]);
+    if (userId) {
+      try {
+        await setDoc(doc(db, 'grades', grade.id), grade);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `grades/${grade.id}`);
+      }
+    }
+    return true;
+  };
+
+  const handleDeleteGrade = async (id: string) => {
+    if (!checkPedAuthorization()) return false;
+    setGrades(prev => prev.filter(g => g.id !== id));
+    if (userId) {
+      try {
+        await deleteDoc(doc(db, 'grades', id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `grades/${id}`);
+      }
+    }
+    return true;
+  };
+
+  const handleAddHomework = async (homework: Homework) => {
+    if (!checkPedAuthorization()) return false;
+    setHomeworks(prev => [homework, ...prev]);
+    if (userId) {
+      try {
+        await setDoc(doc(db, 'homeworks', homework.id), homework);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `homeworks/${homework.id}`);
+      }
+    }
+    return true;
+  };
+
+  const handleDeleteHomework = async (id: string) => {
+    if (!checkPedAuthorization()) return false;
+    setHomeworks(prev => prev.filter(hw => hw.id !== id));
+    if (userId) {
+      try {
+        await deleteDoc(doc(db, 'homeworks', id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `homeworks/${id}`);
+      }
+    }
+    return true;
+  };
+
+  const handleAddAttendance = async (log: Attendance) => {
+    if (!checkPedAuthorization()) return false;
+    setAttendanceLogs(prev => [log, ...prev]);
+    if (userId) {
+      try {
+        await setDoc(doc(db, 'attendance', log.id), log);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `attendance/${log.id}`);
+      }
+    }
+    return true;
+  };
+
+  const handleDeleteAttendance = async (id: string) => {
+    if (!checkPedAuthorization()) return false;
+    setAttendanceLogs(prev => prev.filter(a => a.id !== id));
+    if (userId) {
+      try {
+        await deleteDoc(doc(db, 'attendance', id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `attendance/${id}`);
+      }
+    }
+    return true;
+  };
+
+  const handleAddAnnouncement = async (ann: Announcement) => {
+    if (!checkPedAuthorization()) return false;
+    setAnnouncements(prev => [ann, ...prev]);
+    if (userId) {
+      try {
+        await setDoc(doc(db, 'announcements', ann.id), {
+          ...ann,
+          parentId: userId,
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `announcements/${ann.id}`);
+      }
+    }
+    return true;
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!checkPedAuthorization()) return false;
+    setAnnouncements(prev => prev.filter(a => a.id !== id));
+    if (userId) {
+      try {
+        await deleteDoc(doc(db, 'announcements', id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `announcements/${id}`);
+      }
+    }
+    return true;
+  };
+
   // APEE State Action Handlers
   const handleSaveApeeSettings = async (newSettings: ApeeSettings) => {
+    if (!checkApeeAuthorization()) return;
     setApeeSettings(newSettings);
     if (userId) {
       await saveApeeSettings(userId, newSettings);
@@ -275,6 +523,7 @@ export default function App() {
   };
 
   const handleSaveApeeParentInPlace = async (parent: ApeeParent) => {
+    if (!checkApeeAuthorization()) return;
     setActiveParentToEdit(null);
     setApeeParents(prev => {
       const idx = prev.findIndex(p => p.id === parent.id);
@@ -289,6 +538,7 @@ export default function App() {
   };
 
   const handleDeleteApeeParentInPlace = async (id: string) => {
+    if (!checkApeeAuthorization()) return;
     if (activeParentToEdit?.id === id) {
       setActiveParentToEdit(null);
     }
@@ -299,6 +549,7 @@ export default function App() {
   };
 
   const handleSaveApeeExpenseInPlace = async (expense: ApeeExpense) => {
+    if (!checkApeeAuthorization()) return;
     setApeeExpenses(prev => {
       const idx = prev.findIndex(e => e.id === expense.id);
       if (idx !== -1) {
@@ -312,6 +563,7 @@ export default function App() {
   };
 
   const handleDeleteApeeExpenseInPlace = async (id: string) => {
+    if (!checkApeeAuthorization()) return;
     setApeeExpenses(prev => prev.filter(e => e.id !== id));
     if (userId) {
       await deleteApeeExpense(userId, id);
@@ -319,6 +571,7 @@ export default function App() {
   };
 
   const handleImportApeeBackup = async (data: { parents?: ApeeParent[]; expenses?: ApeeExpense[]; settings?: ApeeSettings }) => {
+    if (!checkApeeAuthorization()) return;
     if (data.settings) setApeeSettings(data.settings);
     if (data.parents) setApeeParents(data.parents);
     if (data.expenses) setApeeExpenses(data.expenses);
@@ -328,6 +581,7 @@ export default function App() {
   };
 
   const handleResetApeeDatabase = async () => {
+    if (!checkApeeAuthorization()) return;
     setApeeSettings(DEFAULT_SETTINGS);
     setApeeParents([]);
     setApeeExpenses([]);
@@ -391,7 +645,28 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col text-slate-900 selection:bg-indigo-100 selection:text-indigo-900">
       <AnimatePresence mode="wait">
-        {!user ? (
+        {!selectedSchoolId ? (
+          /* School Selection or Account Creation Portal (1ère Visite) */
+          <motion.div
+            key="onboarding"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            className="flex-1 flex items-center justify-center p-4 min-h-screen bg-slate-100/40"
+          >
+            <div className="w-full max-w-4xl">
+              <PortalOnboarding
+                currentUserUid={user?.uid || null}
+                onSelectSchool={handleSelectSchool}
+                onAutoLoginGuest={async () => {
+                  const guestUser = await loginAnonymously();
+                  setUser(guestUser);
+                  return guestUser.uid;
+                }}
+              />
+            </div>
+          </motion.div>
+        ) : !user ? (
           /* Landing Screen / Login */
           <motion.div
             key="login"
@@ -501,30 +776,43 @@ export default function App() {
             {/* Top Navigation Bar */}
             <header className="bg-white border-b border-gray-150 py-3.5 px-6 sticky top-0 z-30 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="text-2xl bg-indigo-50 p-2 rounded-xl">🏫</span>
+                <span className="text-2xl bg-indigo-55 p-2 rounded-xl">🏫</span>
                 <div>
                   <h1 className="text-base font-black tracking-tight text-gray-950 flex items-center gap-1">
                     Pasma-sys <span className="text-[10px] bg-slate-900 text-white font-mono px-1.5 py-0.5 rounded-full uppercase scale-90">ENT</span>
                   </h1>
-                  <p className="text-[10px] text-gray-400 font-medium">Parents Management Portal</p>
+                  <p className="text-[10px] text-gray-400 font-medium">Portail de Suivi Éducatif</p>
                 </div>
               </div>
 
               {/* User Profil card & logout */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3.5">
                 <div className="text-right hidden sm:block">
-                  <div className="text-xs font-bold text-gray-900">{user.displayName || user.email}</div>
-                  <div className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 justify-end">
-                    <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" /> Parent Connecté
+                  <div className="text-xs font-black text-indigo-950">
+                    {portalUserRole === 'parent' ? `Espace Parent : ${portalParentDetails?.name}` : "Administration Établissement"}
+                  </div>
+                  <div className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 justify-end">
+                    <span className="h-1.5 w-1.5 bg-indigo-500 rounded-full animate-pulse" /> {apeeSettings.associationName || "Établissement Actif"}
                   </div>
                 </div>
+                
                 <button
-                  onClick={logout}
-                  className="p-2 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50 cursor-pointer transition"
-                  title="Déconnexion"
+                  onClick={handleExitSchool}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-bold rounded-xl transition flex items-center gap-1 border border-slate-200 cursor-pointer"
+                  title="Changer d'établissement scolaire"
                 >
-                  <LogOut className="h-4 w-4" />
+                  🏫 Changer d'école
                 </button>
+
+                {user && (
+                  <button
+                    onClick={() => { handleExitSchool(); logout(); }}
+                    className="p-2 text-gray-440 hover:text-red-500 rounded-xl hover:bg-red-50 cursor-pointer transition text-xs font-bold"
+                    title="Déconnexion complète"
+                  >
+                    Déconnexion
+                  </button>
+                )}
               </div>
             </header>
 
@@ -555,7 +843,7 @@ export default function App() {
                         <GraduationCap className="h-3.5 w-3.5" /> Éléves Supervisés (ENT)
                       </h3>
                       <div className="grid grid-cols-1 gap-3">
-                        {students.map((stu) => (
+                        {filteredStudents.map((stu) => (
                           <StudentCard
                             key={stu.id}
                             student={stu}
@@ -594,107 +882,218 @@ export default function App() {
                           </span>
                         </div>
                       </div>
+
+                      {/* Responsable Financier Security lock bar */}
+                      {apeeSettings.finManagerPassword && (
+                        <div className="border-t border-indigo-900/50 pt-2 mt-2 font-sans text-left">
+                          {isApeeAuthorized ? (
+                            <div className="flex items-center justify-between gap-1.5 bg-emerald-950/40 border border-emerald-900/80 p-2 rounded-xl text-emerald-250">
+                              <div className="space-y-0.5 min-w-0">
+                                <span className="text-[8px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                  🔓 Resp. Financier Débloqué
+                                </span>
+                                <p className="text-[9px] font-bold text-white truncate text-left leading-none" title={apeeSettings.finManagerName}>
+                                  {apeeSettings.finManagerName || "Resp. Financier"}
+                                </p>
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  setIsApeeAuthorized(false);
+                                  alert("L'application a été verrouillée en finance.");
+                                }}
+                                className="text-[7.5px] bg-emerald-900/60 hover:bg-emerald-800 text-emerald-100 font-black px-1.5 py-0.5 rounded uppercase tracking-wide cursor-pointer transition shrink-0"
+                              >
+                                Bloquer
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between gap-1.5 bg-slate-950/40 border border-slate-900/80 p-2 rounded-xl text-slate-350">
+                              <div className="space-y-0.5 min-w-0">
+                                <span className="text-[8px] font-black text-amber-500 uppercase tracking-wider flex items-center gap-1">
+                                  🔒 Restreint Financier
+                                </span>
+                                <p className="text-[9px] font-medium text-slate-400 truncate text-left leading-none">
+                                  Écritures bloquées
+                                </p>
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={handlePromptUnlockApee}
+                                className="text-[7.5px] bg-slate-800 hover:bg-slate-700 text-slate-100 font-black px-1.5 py-0.5 rounded uppercase tracking-wide cursor-pointer transition shrink-0"
+                              >
+                                Débloquer
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Responsable Pedagogique Security lock bar */}
+                      {apeeSettings.pedManagerPassword && (
+                        <div className="border-t border-indigo-900/50 pt-2 mt-2 font-sans text-left">
+                          {isPedAuthorized ? (
+                            <div className="flex items-center justify-between gap-1.5 bg-emerald-950/40 border border-emerald-900/80 p-2 rounded-xl text-emerald-250">
+                              <div className="space-y-0.5 min-w-0">
+                                <span className="text-[8px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                  🔓 Resp. Académique Libre
+                                </span>
+                                <p className="text-[9px] font-bold text-white truncate text-left leading-none" title={apeeSettings.pedManagerName}>
+                                  {apeeSettings.pedManagerName || "Surveillant Général / Censeur"}
+                                </p>
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  setIsPedAuthorized(false);
+                                  alert("L'application a été verrouillée en mode consultation académique.");
+                                }}
+                                className="text-[7.5px] bg-emerald-900/60 hover:bg-emerald-800 text-emerald-100 font-black px-1.5 py-0.5 rounded uppercase tracking-wide cursor-pointer transition shrink-0"
+                              >
+                                Bloquer
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between gap-1.5 bg-slate-950/40 border border-slate-900/80 p-2 rounded-xl text-slate-350">
+                              <div className="space-y-0.5 min-w-0">
+                                <span className="text-[8px] font-black text-amber-500 uppercase tracking-wider flex items-center gap-1">
+                                  🔒 Restreint Académique
+                                </span>
+                                <p className="text-[9px] font-medium text-slate-400 truncate text-left leading-none">
+                                  Notes & Devoirs Verrouillés
+                                </p>
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={handlePromptUnlockPed}
+                                className="text-[7.5px] bg-slate-800 hover:bg-slate-700 text-slate-100 font-black px-1.5 py-0.5 rounded uppercase tracking-wide cursor-pointer transition shrink-0"
+                              >
+                                Débloquer
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {/* Desktop Unified Nav Menu Card */}
                   <div className="bg-white border border-gray-150 rounded-2xl p-4 space-y-1 block shadow-2xs select-none">
                     
-                    {/* SECTION 1: GESTION TRÉSORERIE APEE */}
-                    <h3 className="text-[10px] font-black text-indigo-650 uppercase tracking-widest mb-2 pl-1 flex items-center gap-1">
-                      💼 TRÉSORERIE APEE
-                    </h3>
-                    
-                    <button
-                      onClick={() => setActiveTab('apee_dashboard')}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
-                        activeTab === 'apee_dashboard' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2"><LayoutDashboard className="h-4 w-4" /> Tableau de Bord</span>
-                    </button>
+                    {portalUserRole !== 'parent' ? (
+                      <>
+                        {/* SECTION 1: GESTION TRÉSORERIE APEE */}
+                        <h3 className="text-[10px] font-black text-indigo-650 uppercase tracking-widest mb-2 pl-1 flex items-center gap-1">
+                          💼 TRÉSORERIE APEE
+                        </h3>
+                        
+                        <button
+                          onClick={() => setActiveTab('apee_dashboard')}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            activeTab === 'apee_dashboard' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2"><LayoutDashboard className="h-4 w-4" /> Tableau de Bord</span>
+                        </button>
 
-                    <button
-                      onClick={() => {
-                        setActiveParentToEdit(null);
-                        setActiveTab('apee_recording');
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
-                        activeTab === 'apee_recording' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2"><Calculator className="h-4 w-4" /> Enregistrer Cotis.</span>
-                    </button>
+                        <button
+                          onClick={() => {
+                            setActiveParentToEdit(null);
+                            setActiveTab('apee_recording');
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            activeTab === 'apee_recording' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2"><Calculator className="h-4 w-4" /> Enregistrer Cotis.</span>
+                        </button>
 
-                    <button
-                      onClick={() => setActiveTab('apee_search')}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
-                        activeTab === 'apee_search' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2"><Search className="h-4 w-4" /> Fiches & Reçus</span>
-                    </button>
+                        <button
+                          onClick={() => setActiveTab('apee_search')}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            activeTab === 'apee_search' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2"><Search className="h-4 w-4" /> Fiches & Reçus</span>
+                        </button>
 
-                    <button
-                      onClick={() => setActiveTab('apee_reporting')}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
-                        activeTab === 'apee_reporting' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2"><History className="h-4 w-4" /> Bilans Financiers</span>
-                    </button>
+                        <button
+                          onClick={() => setActiveTab('apee_reporting')}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            activeTab === 'apee_reporting' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2"><History className="h-4 w-4" /> Bilans Financiers</span>
+                        </button>
 
-                    <button
-                      onClick={() => setActiveTab('apee_finance')}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
-                        activeTab === 'apee_finance' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2"><Coins className="h-4 w-4" /> Caisse & Dépenses</span>
-                    </button>
+                        <button
+                          onClick={() => setActiveTab('apee_finance')}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            activeTab === 'apee_finance' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2"><Coins className="h-4 w-4" /> Caisse & Dépenses</span>
+                        </button>
 
-                    <button
-                      onClick={() => setActiveTab('apee_archives')}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
-                        activeTab === 'apee_archives' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2"><Database className="h-4 w-4" /> Archives & Imports</span>
-                    </button>
+                        <button
+                          onClick={() => setActiveTab('apee_archives')}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            activeTab === 'apee_archives' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2"><Database className="h-4 w-4" /> Archives & Imports</span>
+                        </button>
 
-                    <button
-                      onClick={() => setActiveTab('apee_settings')}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
-                        activeTab === 'apee_settings' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2"><Settings className="h-4 w-4" /> Configurations</span>
-                    </button>
+                        <button
+                          onClick={() => setActiveTab('apee_settings')}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            activeTab === 'apee_settings' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2"><Settings className="h-4 w-4" /> Configurations</span>
+                        </button>
 
-                    <button
-                      onClick={() => setActiveTab('apee_reminders')}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
-                        activeTab === 'apee_reminders' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2"><Bell className="h-4 w-4" /> Relances & Rappels</span>
-                      {apeeParents.filter(p => p.status === 'partiel' || p.status === 'retard').length > 0 && (
-                        <span className={`text-[9.5px] font-extrabold px-1.5 py-0.5 rounded-full font-mono shrink-0 transition-colors ${
-                          activeTab === 'apee_reminders' ? 'bg-white text-indigo-700' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {apeeParents.filter(p => p.status === 'partiel' || p.status === 'retard').length}
-                        </span>
-                      )}
-                    </button>
+                        <button
+                          onClick={() => setActiveTab('apee_reminders')}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            activeTab === 'apee_reminders' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2"><Bell className="h-4 w-4" /> Relances & Rappels</span>
+                          {apeeParents.filter(p => p.status === 'partiel' || p.status === 'retard').length > 0 && (
+                            <span className={`text-[9.5px] font-extrabold px-1.5 py-0.5 rounded-full font-mono shrink-0 transition-colors ${
+                              activeTab === 'apee_reminders' ? 'bg-white text-indigo-700' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {apeeParents.filter(p => p.status === 'partiel' || p.status === 'retard').length}
+                            </span>
+                          )}
+                        </button>
 
-                    <button
-                      onClick={() => setActiveTab('apee_legal')}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
-                        activeTab === 'apee_legal' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2"><Shield className="h-4 w-4" /> Droits & RGPD</span>
-                    </button>
+                        <button
+                          onClick={() => setActiveTab('apee_legal')}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            activeTab === 'apee_legal' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2"><Shield className="h-4 w-4" /> Droits & RGPD</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {/* SECTION 1: DOSSIER FINANCIER PARENT */}
+                        <h3 className="text-[10px] font-black text-indigo-650 uppercase tracking-widest mb-2 pl-1 flex items-center gap-1">
+                          💼 MON COMPTE PARENT
+                        </h3>
+                        <button
+                          onClick={() => setActiveTab('billing')}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                            activeTab === 'billing' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2"><Landmark className="h-4 w-4" /> Ma Cotisation & Cantine</span>
+                        </button>
+                      </>
+                    )}
 
                     {/* SECTION 2: SUIVI SCOLAIRE E.N.T. */}
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4 mb-2 pl-1 flex items-center gap-1">
@@ -712,7 +1111,7 @@ export default function App() {
                       <span className="flex items-center gap-2"><Newspaper className="h-4 w-4" /> Annonces & Actus</span>
                     </button>
 
-                    {students.length > 0 && (
+                    {filteredStudents.length > 0 && (
                       <>
                         <button
                           onClick={() => setActiveTab('homework')}
@@ -750,19 +1149,21 @@ export default function App() {
                       </>
                     )}
 
-                    <button
-                      onClick={() => setActiveTab('billing')}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
-                        activeTab === 'billing'
-                          ? 'bg-slate-900 text-white'
-                          : 'text-gray-650 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2"><Landmark className="h-4 w-4" /> Cantine & Services</span>
-                      {unpaidInvoiceCount > 0 && <span className="bg-red-100 text-red-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">{unpaidInvoiceCount}</span>}
-                    </button>
+                    {portalUserRole !== 'parent' && (
+                      <button
+                        onClick={() => setActiveTab('billing')}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                          activeTab === 'billing'
+                            ? 'bg-slate-900 text-white'
+                            : 'text-gray-650 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2"><Landmark className="h-4 w-4" /> Cantine & Services</span>
+                        {unpaidInvoiceCount > 0 && <span className="bg-red-100 text-red-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">{unpaidInvoiceCount}</span>}
+                      </button>
+                    )}
 
-                    {students.length > 0 && (
+                    {filteredStudents.length > 0 && (
                       <>
                         <button
                           onClick={() => setActiveTab('appointments')}
@@ -850,6 +1251,7 @@ export default function App() {
                           onSaveExpense={handleSaveApeeExpenseInPlace}
                           onDeleteExpense={handleDeleteApeeExpenseInPlace}
                           totalRevenue={apeeParents.reduce((sum, p) => sum + p.totalPaid, 0)}
+                          settings={apeeSettings}
                         />
                       </motion.div>
                     )}
@@ -894,25 +1296,61 @@ export default function App() {
                     {/* CLASSIC PÉDAGOGIQUE CHANNELS */}
                     {activeTab === 'announcements' && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key="announcements">
-                        <AnnouncementsFeed />
+                        <AnnouncementsFeed
+                          customAnnouncements={announcements}
+                          onAddAnnouncement={handleAddAnnouncement}
+                          onDeleteAnnouncement={handleDeleteAnnouncement}
+                          isPedAuthorized={isPedAuthorized}
+                          onPromptUnlockPed={handlePromptUnlockPed}
+                          pedManagerName={apeeSettings.pedManagerName}
+                          hasPedPassword={!!apeeSettings.pedManagerPassword}
+                        />
                       </motion.div>
                     )}
 
                     {activeTab === 'homework' && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key="homework">
-                        <HomeworkBoard homeworks={currentHomeworks} onUpdateHomework={handleUpdateHomeworkInPlace} />
+                        <HomeworkBoard
+                          homeworks={currentHomeworks}
+                          onUpdateHomework={handleUpdateHomeworkInPlace}
+                          onAddHomework={handleAddHomework}
+                          onDeleteHomework={handleDeleteHomework}
+                          isPedAuthorized={isPedAuthorized}
+                          onPromptUnlockPed={handlePromptUnlockPed}
+                          pedManagerName={apeeSettings.pedManagerName}
+                          hasPedPassword={!!apeeSettings.pedManagerPassword}
+                          activeStudent={activeStudent}
+                        />
                       </motion.div>
                     )}
 
                     {activeTab === 'grades' && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key="grades">
-                        <GradesDashboard grades={currentGrades} />
+                        <GradesDashboard
+                          grades={currentGrades}
+                          onAddGrade={handleAddGrade}
+                          onDeleteGrade={handleDeleteGrade}
+                          isPedAuthorized={isPedAuthorized}
+                          onPromptUnlockPed={handlePromptUnlockPed}
+                          pedManagerName={apeeSettings.pedManagerName}
+                          hasPedPassword={!!apeeSettings.pedManagerPassword}
+                          activeStudent={activeStudent}
+                        />
                       </motion.div>
                     )}
 
                     {activeTab === 'attendance' && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key="attendance">
-                        <AttendanceTracker attendanceLogs={currentAttendance} />
+                        <AttendanceTracker
+                          attendanceLogs={currentAttendance}
+                          onAddAttendance={handleAddAttendance}
+                          onDeleteAttendance={handleDeleteAttendance}
+                          isPedAuthorized={isPedAuthorized}
+                          onPromptUnlockPed={handlePromptUnlockPed}
+                          pedManagerName={apeeSettings.pedManagerName}
+                          hasPedPassword={!!apeeSettings.pedManagerPassword}
+                          activeStudent={activeStudent}
+                        />
                       </motion.div>
                     )}
 

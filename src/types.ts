@@ -101,8 +101,18 @@ export interface Invoice {
   amountPaid?: number;
   studentsList?: string; // Serialized JSON list of pupils: {name, classRoom}
   paymentsHistory?: string; // Serialized JSON list of payment items
+  transactionId?: string; // For APEE transaction ID filtering
+  provider?: string; // For APEE provider tracking (MTN/Orange/Wave)
   expenseType?: string; // For expense records
   description?: string; // Detail description
+  budgetLineId?: string; // For expense records budget line reference
+  budgetLinesList?: string; // For serialized budget lines list in settings
+  finManagerName?: string;
+  finManagerPhone?: string;
+  finManagerPassword?: string;
+  pedManagerName?: string;
+  pedManagerPhone?: string;
+  pedManagerPassword?: string;
 }
 
 export interface ApeeStudentLink {
@@ -115,6 +125,9 @@ export interface ApeePaymentItem {
   amount: number;
   date: string;
   note?: string;
+  method?: string;
+  transactionId?: string;
+  provider?: string;
 }
 
 export interface ApeeParent {
@@ -142,6 +155,14 @@ export interface ApeeExpense {
   status: 'Pending' | 'Approved' | 'Executed';
   date: string;
   description: string;
+  budgetLineId?: string; // Optional budget line association
+}
+
+export interface ApeeBudgetLine {
+  id: string;
+  name: string; // Nom de la ligne budgétaire, e.g. "Fournitures scolaires"
+  allocatedAmount: number; // Montant alloué, en FCFA
+  description?: string;
 }
 
 export interface ApeeSettings {
@@ -149,5 +170,12 @@ export interface ApeeSettings {
   schoolYear: string;
   cotisationAmount: number;
   financialGoal: number;
+  budgetLines?: ApeeBudgetLine[];
+  finManagerName?: string;
+  finManagerPhone?: string;
+  finManagerPassword?: string;
+  pedManagerName?: string;
+  pedManagerPhone?: string;
+  pedManagerPassword?: string;
 }
 

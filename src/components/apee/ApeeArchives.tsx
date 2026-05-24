@@ -93,8 +93,8 @@ export default function ApeeArchives({ parents, expenses, settings, onImportBack
           status: 'soldé',
           note: 'A soldé la totalité à l\'inscription. Merci pour sa ponctualité.',
           payments: [
-            { id: 'pay_mock_1a', amount: 30000, date: '2025-09-05', note: 'Acompte inscription' },
-            { id: 'pay_mock_1b', amount: 20000, date: '2025-10-10', note: 'Solde trim 1' }
+            { id: 'pay_mock_1a', amount: 30000, date: '2025-09-05', note: 'Acompte inscription', method: 'Orange Money' },
+            { id: 'pay_mock_1b', amount: 20000, date: '2025-10-10', note: 'Solde trim 1', method: 'MTN Mobile Money' }
           ],
           createdAt: '2025-09-05T08:30:00Z',
           updatedAt: '2025-10-10T14:20:00Z'
@@ -112,7 +112,7 @@ export default function ApeeArchives({ parents, expenses, settings, onImportBack
           status: 'partiel',
           note: 'S\'engage à solder le reste de 10 000 FCFA lors du versement du salaire de décembre.',
           payments: [
-            { id: 'pay_mock_2a', amount: 15000, date: '2025-09-12', note: 'Acompte rentrée' }
+            { id: 'pay_mock_2a', amount: 15000, date: '2025-09-12', note: 'Acompte rentrée', method: 'Orange Money' }
           ],
           createdAt: '2025-09-12T09:45:00Z',
           updatedAt: '2025-09-12T09:45:00Z'
@@ -132,7 +132,7 @@ export default function ApeeArchives({ parents, expenses, settings, onImportBack
           status: 'partiel',
           note: 'Famille nombreuse. Acompte de 25 000 FCFA versé. Délai COGE accordé de 2 mois.',
           payments: [
-            { id: 'pay_mock_3a', amount: 25000, date: '2025-09-20', note: 'Acompte de confiance' }
+            { id: 'pay_mock_3a', amount: 25000, date: '2025-09-20', note: 'Acompte de confiance', method: 'Espèces' }
           ],
           createdAt: '2025-09-20T11:00:00Z',
           updatedAt: '2025-09-20T11:00:00Z'

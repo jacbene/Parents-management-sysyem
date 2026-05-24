@@ -264,10 +264,22 @@ export default function ApeeSearch({ parents, onEditParentRequest, onDeleteParen
                     {selectedParent.payments.map((p, idx) => (
                       <div key={p.id || idx} className="bg-white border rounded-lg p-2 flex justify-between items-center text-xs">
                         <div>
-                          <div className="font-extrabold text-slate-800">{p.amount.toLocaleString()} FCFA</div>
-                          <div className="text-[9px] text-gray-400">{p.date} {p.note && `(${p.note})`}</div>
+                          <div className="font-extrabold text-slate-850 flex items-center gap-1.5">
+                            <span>{p.amount.toLocaleString()} FCFA</span>
+                            <span className="text-[8px] font-sans font-extrabold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                              {p.method || 'Espèces'}
+                            </span>
+                          </div>
+                          <div className="text-[9px] text-gray-400 mt-0.5">
+                            {p.date} {p.note && `(${p.note})`}
+                            {p.transactionId && (
+                              <span className="ml-1 px-1.5 py-0.5 text-[8px] font-semibold text-indigo-700 bg-indigo-50 rounded">
+                                TX: {p.transactionId} ({p.provider || 'N/A'})
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-[10px] font-bold text-slate-400">Versement #{idx + 1}</span>
+                        <span className="text-[10px] font-bold text-slate-400 font-sans">Versement #{idx + 1}</span>
                       </div>
                     ))}
                   </div>

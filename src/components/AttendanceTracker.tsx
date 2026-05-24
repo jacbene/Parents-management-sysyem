@@ -1,12 +1,34 @@
-import { Attendance, AttendanceStatus } from '../types';
-import { Calendar, CheckCircle2, XCircle, AlertCircle, Clock } from 'lucide-react';
-import { motion } from 'motion/react';
+import React, { useState } from 'react';
+import { Attendance, AttendanceStatus, Student } from '../types';
+import { Calendar, CheckCircle2, XCircle, AlertCircle, Clock, Plus, Trash2, Lock, Unlock } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface AttendanceTrackerProps {
   attendanceLogs: Attendance[];
+  onAddAttendance?: (log: Attendance) => Promise<boolean>;
+  onDeleteAttendance?: (id: string) => Promise<boolean>;
+  isPedAuthorized?: boolean;
+  onPromptUnlockPed?: () => void;
+  pedManagerName?: string;
+  hasPedPassword?: boolean;
+  activeStudent?: Student | null;
 }
 
-export default function AttendanceTracker({ attendanceLogs }: AttendanceTrackerProps) {
+export default function AttendanceTracker({
+  attendanceLogs,
+  onAddAttendance,
+  onDeleteAttendance,
+  isPedAuthorized = false,
+  onPromptUnlockPed,
+  pedManagerName = '',
+  hasPedPassword = false,
+  activeStudent,
+}: AttendanceTrackerProps) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [status, setStatus] = useState<AttendanceStatus>('Absent');
+  const [remarks, setRemarks] = useState('');
+  const [attDate, setAttDate] = useState('');
+
   // Compute basic attendance statistics
   const totalDays = attendanceLogs.length;
   const presentDays = attendanceLogs.filter(a => a.status === 'Present').length;
@@ -18,8 +40,8 @@ export default function AttendanceTracker({ attendanceLogs }: AttendanceTrackerP
     ? (((presentDays + excusedDays + lateDays / 2) / totalDays) * 100).toFixed(0)
     : '100';
 
-  const getStatusConfig = (status: AttendanceStatus) => {
-    switch (status) {
+  const getStatusConfig = (st: AttendanceStatus) => {
+    switch (st) {
       case 'Present':
         return {
           icon: CheckCircle2,
@@ -51,28 +73,194 @@ export default function AttendanceTracker({ attendanceLogs }: AttendanceTrackerP
     }
   };
 
+  const handleOpenForm = () => {
+    if (hasPedPassword && !isPedAuthorized && onPromptUnlockPed) {
+      onPromptUnlockPed();
+      return;
+    }
+    setAttDate(new Date().toISOString().split('T')[0]);
+    setShowAddForm(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeStudent) {
+      alert('Veuillez sélectionner un élève avant de pouvoir émarger.');
+      return;
+    }
+
+    if (onAddAttendance) {
+      const newLog: Attendance = {
+        id: 'att_' + Date.now(),
+        studentId: activeStudent.id,
+        parentId: activeStudent.parentId,
+        date: attDate,
+        status,
+        remarks: remarks.trim() || undefined
+      };
+
+      const success = await onAddAttendance(newLog);
+      if (success) {
+        setRemarks('');
+        setShowAddForm(false);
+      }
+    }
+  };
+
+  const handleDelete = async (id: string, dateStr: string) => {
+    if (hasPedPassword && !isPedAuthorized && onPromptUnlockPed) {
+      onPromptUnlockPed();
+      return;
+    }
+    const confirm = window.confirm(`Voulez-vous supprimer l'émargement du ${dateStr} ?`);
+    if (confirm && onDeleteAttendance) {
+      await onDeleteAttendance(id);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between border-b pb-4 border-gray-100">
+      <div className="bg-white border border-gray-150 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold font-sans text-gray-900 tracking-tight flex items-center gap-2">
             <Calendar className="h-5 w-5 text-indigo-600" />
             Registre d'Assiduité & Présences
           </h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 mt-0.5">
             Consultez le relevé quotidien des présences, retards signalés et justificatifs validés.
           </p>
         </div>
+
+        <button
+          onClick={handleOpenForm}
+          className="px-4 py-2 bg-slate-900 hover:bg-slate-850 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+        >
+          <Plus className="h-4 w-4" /> Enregistrer Présence
+        </button>
       </div>
 
+      {/* Security Status Header */}
+      {hasPedPassword && (
+        <div className={`p-3.5 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+          isPedAuthorized ? 'bg-emerald-50 text-emerald-950 border-emerald-150' : 'bg-slate-50 text-slate-800 border-slate-150'
+        }`}>
+          <div className="flex items-center gap-2">
+            {isPedAuthorized ? (
+              <Unlock className="h-4.5 w-4.5 text-emerald-600 shrink-0" />
+            ) : (
+              <Lock className="h-4.5 w-4.5 text-slate-500 shrink-0" />
+            )}
+            <div>
+              <span className="font-extrabold flex items-center gap-1.5 uppercase tracking-wide text-[10px] text-slate-650">
+                {isPedAuthorized ? '🔓 Accès Officiel Débloqué' : '🔒 Registre d\'Assiduité Verrouillé (Lecture Seule)'}
+              </span>
+              <p className="font-medium text-slate-600 mt-0.5">
+                {isPedAuthorized 
+                  ? `Vous agissez en qualité de : ${pedManagerName || "Principal Responsable Pédagogique"}`
+                  : `La modification du registre de présences officielle requiert le mot de passe du Surveillant ou Censeur.`}
+              </p>
+            </div>
+          </div>
+          {!isPedAuthorized && onPromptUnlockPed && (
+            <button
+              onClick={onPromptUnlockPed}
+              className="px-3 py-1.5 bg-white text-slate-800 border border-slate-250 font-bold rounded-lg text-[10px] hover:bg-slate-50 uppercase tracking-wider transition cursor-pointer shrink-0"
+            >
+              Saisir mot de passe
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Add Attendance Section Form */}
+      <AnimatePresence>
+        {showAddForm && activeStudent && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <form onSubmit={handleSubmit} className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-4 shadow-3xs">
+              <div className="flex items-center justify-between border-b border-slate-205 pb-2 select-none">
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
+                  📋 Émarger une présence officielle pour {activeStudent.name}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  className="text-xs text-gray-400 hover:text-gray-600 font-bold uppercase transition cursor-pointer"
+                >
+                  Annuler
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase">Statut de Présence <span className="text-red-500">*</span></label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as AttendanceStatus)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-indigo-500 font-medium text-slate-850"
+                  >
+                    <option value="Present">Présent (Classe)</option>
+                    <option value="Absent">Absent (Non Justifié)</option>
+                    <option value="Late">Arrivée Tardive (Retard)</option>
+                    <option value="Excused">Absence Justifiée / Excusée</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase">Date d'évaluation <span className="text-red-500">*</span></label>
+                  <input
+                    type="date"
+                    required
+                    value={attDate}
+                    onChange={(e) => setAttDate(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-indigo-500 font-medium text-slate-800"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase">Commentaire / Justification</label>
+                  <input
+                    type="text"
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    placeholder="Ex: Certificat médical fourni de l'hôpital général."
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-indigo-500 font-medium text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  className="px-4 py-2 border border-slate-250 bg-white text-slate-800 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-50 cursor-pointer text-center"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1 cursor-pointer text-center shadow-xs"
+                >
+                  <CheckCircle2 className="h-4 w-4" /> Valider Émargement
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {attendanceLogs.length === 0 ? (
-        <div className="text-center p-12 bg-gray-50/50 rounded-2xl border border-gray-100">
+        <div className="text-center p-12 bg-gray-50/50 rounded-2xl border border-gray-100 select-none">
           <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
           <p className="text-sm text-gray-500 font-medium">Relevé de présences vierge pour cet élève.</p>
         </div>
       ) : (
         <>
-          {/* Circular Stats Grid */}
+          {/* Key Stats Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="p-4 bg-white border border-gray-100 rounded-2xl text-center space-y-1">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Taux de Présence</span>
@@ -107,36 +295,55 @@ export default function AttendanceTracker({ attendanceLogs }: AttendanceTrackerP
               {attendanceLogs.map((log, idx) => {
                 const config = getStatusConfig(log.status);
                 const Icon = config.icon;
+                const dateLabel = new Date(log.date).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                const isCustom = log.id.startsWith('att_') && Number(log.id.split('_')[1]) > 10000;
+
                 return (
                   <motion.div
                     key={log.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.06 }}
-                    className="relative"
+                    transition={{ delay: idx * 0.04 }}
+                    className="relative group"
                   >
                     {/* Timeline bullet icon */}
-                    <div className={`absolute -left-[37px] top-0 p-1.5 rounded-full border-2 border-white ${config.color} shadow-sm`}>
+                    <div className={`absolute -left-[37px] top-0.5 p-1.5 rounded-full border-2 border-white ${config.color} shadow-sm`}>
                       <Icon className="h-4 w-4" />
                     </div>
 
-                    <div className="p-4 bg-white rounded-xl border border-gray-100 flex items-center justify-between gap-4 flex-wrap hover:shadow-xs transition-shadow">
-                      <div className="space-y-1">
+                    <div className="p-4 bg-white rounded-2xl border border-gray-100 flex items-center justify-between gap-4 flex-wrap hover:shadow-xs transition duration-200">
+                      <div className="space-y-1 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold font-mono text-gray-700">
-                            {new Date(log.date).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                          <span className="text-xs font-bold font-mono text-gray-700 capitalize">
+                            {dateLabel}
                           </span>
                         </div>
                         {log.remarks && (
-                          <div className="text-xs text-gray-500 flex items-center gap-1.5 mt-1 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                          <div className="text-xs text-gray-500 flex items-center gap-1.5 mt-1 bg-slate-50 p-2 rounded-xl border border-slate-100 w-fit">
                             <AlertCircle className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                             <span>{log.remarks}</span>
                           </div>
                         )}
                       </div>
-                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${config.badge}`}>
-                        {config.text}
-                      </span>
+                      
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${config.badge} select-none`}>
+                          {config.text}
+                        </span>
+
+                        {onDeleteAttendance && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(log.id, dateLabel)}
+                            className={`text-red-650 hover:text-red-800 p-1.5 bg-red-100/10 hover:bg-red-200/20 border border-transparent hover:border-red-500/10 rounded-xl transition duration-200 cursor-pointer ${
+                              isPedAuthorized || isCustom ? 'opacity-100' : 'opacity-40 hover:opacity-100 md:opacity-0 md:group-hover:opacity-100'
+                            }`}
+                            title="Supprimer cette présence"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 );

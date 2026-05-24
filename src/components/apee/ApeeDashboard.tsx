@@ -31,6 +31,15 @@ export default function ApeeDashboard({ parents, expenses, settings, onNavigate 
     .reduce((sum, e) => sum + e.amount, 0);
   const activeBalance = totalPaidRevenue - totalExecutedExpenses;
 
+  // Budget calculations
+  const budgetLines = settings.budgetLines || [];
+  const spentByBudgetLine = expenses.reduce((acc, exp) => {
+    if (exp.budgetLineId && exp.status === 'Executed') {
+      acc[exp.budgetLineId] = (acc[exp.budgetLineId] || 0) + exp.amount;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
   // Recharts Month level data processing
   const monthlyDataMap: { [month: string]: number } = {};
   parents.forEach(p => {
@@ -266,6 +275,75 @@ export default function ApeeDashboard({ parents, expenses, settings, onNavigate 
 
         </div>
       </div>
+
+      {/* Annual Budget Lines Analytics Widget */}
+      {budgetLines.length > 0 && (
+        <div className="bg-white border border-slate-150 rounded-2xl p-5 space-y-4 shadow-3xs">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="space-y-0.5">
+              <h3 className="text-xs font-bold text-slate-850 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                💼 Planification Budgétaire & Dépenses Consommées
+              </h3>
+              <p className="text-[10px] text-gray-400 font-sans">
+                Taux de consommation des rubriques budgétaires approuvées pour l'exercice {settings.schoolYear}.
+              </p>
+            </div>
+            <button
+              onClick={() => onNavigate('settings')}
+              className="text-[10px] bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 font-extrabold px-3 py-1 rounded-lg transition cursor-pointer"
+            >
+              Plus Répartir / Modifier
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1.5">
+            {budgetLines.map((line) => {
+              const spent = spentByBudgetLine[line.id] || 0;
+              const allocated = line.allocatedAmount;
+              const percent = allocated > 0 ? Math.round((spent / allocated) * 100) : 0;
+              
+              let progressColor = 'bg-indigo-600';
+              let badgeStyle = 'bg-indigo-50 text-indigo-700 border-indigo-100';
+              if (percent >= 100) {
+                progressColor = 'bg-rose-500';
+                badgeStyle = 'bg-rose-50 text-rose-700 border-rose-150';
+              } else if (percent >= 80) {
+                progressColor = 'bg-amber-500';
+                badgeStyle = 'bg-amber-50 text-amber-700 border-amber-150';
+              } else if (percent > 0) {
+                progressColor = 'bg-emerald-500';
+                badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-150';
+              }
+
+              return (
+                <div key={line.id} className="border border-slate-150 rounded-xl p-3.5 space-y-2.5 bg-slate-50/10 hover:border-slate-300 transition duration-150 flex flex-col justify-between">
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-start gap-2">
+                      <span className="text-xs font-bold text-slate-800 line-clamp-1">{line.name}</span>
+                      <span className={`text-[9px] font-sans font-black px-1.5 py-0.5 rounded border ${badgeStyle} shrink-0`}>
+                        {percent}%
+                      </span>
+                    </div>
+                    {line.description && (
+                      <p className="text-[10px] text-gray-400 line-clamp-1 font-serif leading-none italic">{line.description}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${progressColor}`} style={{ width: `${Math.min(100, percent)}%` }} />
+                    </div>
+                    <div className="flex items-center justify-between text-[9px] font-bold font-mono text-slate-500">
+                      <span>Usé: {spent.toLocaleString()} F</span>
+                      <span>Restant: {Math.max(0, allocated - spent).toLocaleString()} F</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Visual Analytics Block (Charts) */}
       <h3 className="text-xs font-bold text-slate-700 tracking-wider uppercase pt-2">Graphiques et Indicateurs de Collecte</h3>

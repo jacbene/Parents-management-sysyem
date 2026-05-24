@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, CheckCircle2, DollarSign, Wallet2, FileText, ArrowDownLeft, ArrowUpRight, Check, AlertCircle } from 'lucide-react';
-import { ApeeExpense } from '../../types';
+import { Plus, Trash2, CheckCircle2, DollarSign, Wallet2, FileText, ArrowDownLeft, ArrowUpRight, Check, AlertCircle, TrendingUp } from 'lucide-react';
+import { ApeeExpense, ApeeSettings } from '../../types';
 
 interface ApeeFinancialProps {
   expenses: ApeeExpense[];
   onSaveExpense: (expense: ApeeExpense) => void;
   onDeleteExpense: (id: string) => void;
   totalRevenue: number;
+  settings: ApeeSettings;
 }
 
-export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense, totalRevenue }: ApeeFinancialProps) {
+export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense, totalRevenue, settings }: ApeeFinancialProps) {
   // New expense form states
   const [showAddForm, setShowAddForm] = useState(false);
   const [title, setTitle] = useState('');
@@ -18,6 +19,7 @@ export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense
   const [status, setStatus] = useState<'Pending' | 'Approved' | 'Executed'>('Pending');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState('');
+  const [budgetLineId, setBudgetLineId] = useState<string>('');
 
   // Active filter tab
   const [activeFilter, setActiveFilter] = useState<string>('all'); // 'all' | 'command' | 'payment-order' | 'refund'
@@ -39,6 +41,16 @@ export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense
 
   const currentBoxBalance = totalRevenue - calculatedExpenses.totalExecuted;
 
+  const budgetLines = settings.budgetLines || [];
+
+  // Calculate spent per budget category
+  const spentByBudgetLine = expenses.reduce((acc, exp) => {
+    if (exp.budgetLineId && exp.status === 'Executed') {
+      acc[exp.budgetLineId] = (acc[exp.budgetLineId] || 0) + exp.amount;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || amount <= 0) {
@@ -54,6 +66,7 @@ export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense
       status,
       date,
       description: description.trim(),
+      budgetLineId: budgetLineId || undefined,
     };
 
     onSaveExpense(newExpense);
@@ -61,6 +74,7 @@ export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense
     setAmount(0);
     setDescription('');
     setStatus('Pending');
+    setBudgetLineId('');
     setShowAddForm(false);
   };
 
@@ -136,6 +150,71 @@ export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense
 
       </div>
 
+      {/* Real-time Budget Consumption Rates */}
+      {budgetLines.length > 0 && (
+        <div className="bg-white border border-slate-150 rounded-2xl p-4 md:p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 select-none">
+            <h3 className="text-xs font-bold text-slate-850 uppercase tracking-wide flex items-center gap-1.5">
+              <TrendingUp className="h-4.5 w-4.5 text-indigo-500" /> Taux de Consommation des Rubriques Budgétaires
+            </h3>
+            <span className="text-[10px] text-gray-400 font-medium">Flux de décaissements effectifs</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {budgetLines.map((line) => {
+              const spent = spentByBudgetLine[line.id] || 0;
+              const allocated = line.allocatedAmount;
+              const percent = allocated > 0 ? Math.round((spent / allocated) * 100) : 0;
+              const remaining = Math.max(0, allocated - spent);
+
+              let barColor = 'bg-indigo-600';
+              let badgeColor = 'bg-indigo-50 text-indigo-700';
+              if (percent >= 100) {
+                barColor = 'bg-rose-500 animate-pulse';
+                badgeColor = 'bg-rose-50 text-rose-700 border border-rose-200';
+              } else if (percent >= 85) {
+                barColor = 'bg-amber-500';
+                badgeColor = 'bg-amber-50 text-amber-700 border border-amber-200';
+              } else if (percent > 0) {
+                barColor = 'bg-emerald-500';
+                badgeColor = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+              }
+
+              return (
+                <div key={line.id} className="border border-slate-100 rounded-xl p-3 space-y-2 bg-slate-50/20 hover:border-slate-300 transition-all duration-200">
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-xs font-bold text-slate-800 line-clamp-1">{line.name}</span>
+                    <span className={`text-[9px] font-sans font-extrabold px-1.5 py-0.5 rounded uppercase shrink-0 ${badgeColor}`}>
+                      {percent}%
+                    </span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${Math.min(100, percent)}%` }} />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[9px] font-semibold text-slate-500 font-mono">
+                    <span>Décavé: {spent.toLocaleString()} F</span>
+                    <span>Alloué: {allocated.toLocaleString()} F</span>
+                  </div>
+
+                  {percent >= 100 ? (
+                    <div className="text-[8px] font-bold text-rose-600 uppercase flex items-center gap-1">
+                      ⚠️ Rubrique entièrement consommée ({percent}%)
+                    </div>
+                  ) : (
+                    <div className="text-[8px] font-semibold text-gray-400 font-sans">
+                      Quota restant : <span className="font-mono text-emerald-600 font-bold">{remaining.toLocaleString()} FCFA</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Operation input form */}
       {showAddForm && (
         <form onSubmit={handleSubmit} className="bg-slate-50/50 border border-slate-150 p-4.5 rounded-2xl space-y-4">
@@ -186,7 +265,7 @@ export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense
 
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase">Date de validation des pièces</label>
@@ -197,6 +276,20 @@ export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white focus:outline-indigo-500"
               />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-550 uppercase">Rubrique Budgétaire Associée</label>
+              <select
+                value={budgetLineId}
+                onChange={(e) => setBudgetLineId(e.target.value)}
+                className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white text-slate-700 focus:outline-indigo-505 cursor-pointer"
+              >
+                <option value="">-- Non spécifiée / Fonctionnement --</option>
+                {budgetLines.map(line => (
+                  <option key={line.id} value={line.id}>📁 {line.name} ({line.allocatedAmount.toLocaleString()} FCFA)</option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-1">
@@ -288,7 +381,14 @@ export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense
                   </td>
                   <td className="py-2 px-3">
                     <p className="font-bold text-slate-800">{exp.title}</p>
-                    {exp.description && <p className="text-[10px] text-gray-400 font-serif">{exp.description}</p>}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                      {exp.description && <span className="text-[10px] text-gray-400 font-serif mr-1">{exp.description}</span>}
+                      {exp.budgetLineId && (
+                        <span className="text-[8px] font-sans font-extrabold bg-slate-100 text-slate-600 px-1 py-0.5 rounded tracking-wide uppercase select-none">
+                          📁 {budgetLines.find(l => l.id === exp.budgetLineId)?.name || 'Rubrique générale'}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
                     {exp.amount.toLocaleString()} FCFA

@@ -13,6 +13,19 @@ export const DEFAULT_SETTINGS: ApeeSettings = {
   schoolYear: '2025/2026',
   cotisationAmount: 25000,
   financialGoal: 5000000,
+  budgetLines: [
+    { id: 'bl_1', name: 'Soutien Pédagogique et Matériel Didactique', allocatedAmount: 1500000, description: 'Achat de craies, livres, cahiers de préparation, et soutien aux enseignants vacataires' },
+    { id: 'bl_2', name: 'Aménagement et Réparations des Salles', allocatedAmount: 1200000, description: 'Réparation des tables-bancs, entretien des toitures et peinture' },
+    { id: 'bl_3', name: 'Fournitures de Bureau et Administration', allocatedAmount: 850000, description: 'Rames de papier, encre d\'imprimante, frais administratifs' },
+    { id: 'bl_4', name: 'Santé, Hygiène et Eau potable', allocatedAmount: 650000, description: 'Boîte à pharmacie d\'urgence, eau potable, entretien des sanitaires' },
+    { id: 'bl_5', name: 'Activités Post et Périscolaires (FENASSCO)', allocatedAmount: 800000, description: 'Fêtes scolaires, compétitions sportives et récompenses de fin d\'année' }
+  ],
+  finManagerName: '',
+  finManagerPhone: '',
+  finManagerPassword: '',
+  pedManagerName: '',
+  pedManagerPhone: '',
+  pedManagerPassword: ''
 };
 
 /**
@@ -59,6 +72,7 @@ function normalizeToApeeParent(inv: Invoice): ApeeParent {
  * Normalizes ApeeParent to Firestore Invoice shape
  */
 function normalizeToInvoice(parent: ApeeParent, parentId: string): Invoice {
+  const lastPayment = parent.payments && parent.payments.length > 0 ? parent.payments[parent.payments.length - 1] : null;
   return {
     id: parent.id,
     studentId: 'apee_ces_ekali_1', // Marker for parent cotisation
@@ -76,6 +90,8 @@ function normalizeToInvoice(parent: ApeeParent, parentId: string): Invoice {
     amountPaid: parent.totalPaid,
     studentsList: JSON.stringify(parent.students),
     paymentsHistory: JSON.stringify(parent.payments),
+    transactionId: lastPayment?.transactionId || '',
+    provider: lastPayment?.provider || '',
   };
 }
 
@@ -94,6 +110,7 @@ function normalizeExpenseToInvoice(exp: ApeeExpense, parentId: string): Invoice 
     paymentDate: exp.date,
     expenseType: exp.type,
     description: exp.description,
+    budgetLineId: exp.budgetLineId || '',
   };
 }
 
@@ -109,6 +126,7 @@ function normalizeToApeeExpense(inv: Invoice): ApeeExpense {
     status: (inv.status === 'Paid' ? 'Executed' : 'Pending') as 'Pending' | 'Approved' | 'Executed',
     date: inv.paymentDate || new Date().toISOString().slice(0, 10),
     description: inv.description || '',
+    budgetLineId: inv.budgetLineId || '',
   };
 }
 
@@ -155,11 +173,26 @@ export async function fetchApeeData(parentId: string) {
       } else if (data.studentId === 'apee_expense') {
         dbExpenses.push(normalizeToApeeExpense(data));
       } else if (data.id === 'apee_settings') {
+        let lines = DEFAULT_SETTINGS.budgetLines;
+        try {
+          if (data.budgetLinesList) {
+            lines = JSON.parse(data.budgetLinesList);
+          }
+        } catch (e) {
+          console.error("Failed to parse budgetLinesList from Firestore", e);
+        }
         dbSettings = {
           associationName: data.title,
           cotisationAmount: data.amount,
           schoolYear: data.dueDate,
           financialGoal: data.amountPaid || DEFAULT_SETTINGS.financialGoal,
+          budgetLines: lines,
+          finManagerName: data.finManagerName || '',
+          finManagerPhone: data.finManagerPhone || '',
+          finManagerPassword: data.finManagerPassword || '',
+          pedManagerName: data.pedManagerName || '',
+          pedManagerPhone: data.pedManagerPhone || '',
+          pedManagerPassword: data.pedManagerPassword || '',
         };
       }
     });
@@ -203,6 +236,13 @@ export async function saveApeeSettings(parentId: string, settings: ApeeSettings)
       dueDate: settings.schoolYear,
       status: 'Paid',
       amountPaid: settings.financialGoal,
+      budgetLinesList: JSON.stringify(settings.budgetLines || []),
+      finManagerName: settings.finManagerName || '',
+      finManagerPhone: settings.finManagerPhone || '',
+      finManagerPassword: settings.finManagerPassword || '',
+      pedManagerName: settings.pedManagerName || '',
+      pedManagerPhone: settings.pedManagerPhone || '',
+      pedManagerPassword: settings.pedManagerPassword || '',
     });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'invoices/apee_settings');
@@ -345,6 +385,13 @@ export async function importFullBackup(
       dueDate: finalSettings.schoolYear,
       status: 'Paid',
       amountPaid: finalSettings.financialGoal,
+      budgetLinesList: JSON.stringify(finalSettings.budgetLines || []),
+      finManagerName: finalSettings.finManagerName || '',
+      finManagerPhone: finalSettings.finManagerPhone || '',
+      finManagerPassword: finalSettings.finManagerPassword || '',
+      pedManagerName: finalSettings.pedManagerName || '',
+      pedManagerPhone: finalSettings.pedManagerPhone || '',
+      pedManagerPassword: finalSettings.pedManagerPassword || '',
     });
 
     // Write parents
