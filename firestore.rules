@@ -31,7 +31,7 @@ service cloud.firestore {
           && data.name is string && data.name.size() > 0 && data.name.size() <= 100
           && data.grade is string && data.grade.size() <= 50
           && data.classRoom is string && data.classRoom.size() <= 50
-          && data.avatar is string && data.avatar.size() <= 10;
+          && data.avatar is string && data.avatar.size() <= 1000000;
     }
 
     function isValidGrade(data) {
@@ -42,7 +42,7 @@ service cloud.firestore {
           && data.examName is string && data.examName.size() <= 100
           && data.score is number && data.score >= 0 && data.score <= 1000
           && data.maxScore is number && data.maxScore > 0
-          && (data.teacherRemarks is string ? data.teacherRemarks.size() <= 1000 : true)
+          && (!('teacherRemarks' in data) || (data.teacherRemarks is string && data.teacherRemarks.size() <= 1000))
           && data.date is string;
     }
 
@@ -52,7 +52,7 @@ service cloud.firestore {
           && data.parentId is string && data.parentId == request.auth.uid
           && data.date is string
           && data.status is string && (data.status == 'Present' || data.status == 'Absent' || data.status == 'Late' || data.status == 'Excused')
-          && (data.remarks is string ? data.remarks.size() <= 1000 : true);
+          && (!('remarks' in data) || (data.remarks is string && data.remarks.size() <= 1000));
     }
 
     function isValidHomework(data) {
@@ -61,10 +61,10 @@ service cloud.firestore {
           && data.parentId is string && data.parentId == request.auth.uid
           && data.subject is string && data.subject.size() <= 100
           && data.title is string && data.title.size() <= 200
-          && (data.description is string ? data.description.size() <= 2000 : true)
+          && (!('description' in data) || (data.description is string && data.description.size() <= 2000))
           && data.dueDate is string
           && data.status is string && (data.status == 'Pending' || data.status == 'Completed' || data.status == 'Overdue')
-          && (data.grade is string ? data.grade.size() <= 50 : true);
+          && (!('grade' in data) || (data.grade is string && data.grade.size() <= 50));
     }
 
     function isValidAnnouncement(data) {
@@ -73,7 +73,7 @@ service cloud.firestore {
           && data.content is string && data.content.size() <= 5000
           && data.category is string && (data.category == 'General' || data.category == 'Academic' || data.category == 'Event' || data.category == 'Urgent')
           && data.date is string
-          && (data.author is string ? data.author.size() <= 100 : true);
+          && (!('author' in data) || (data.author is string && data.author.size() <= 100));
     }
 
     function isValidAppointment(data) {
@@ -84,7 +84,7 @@ service cloud.firestore {
           && data.subject is string && data.subject.size() <= 100
           && data.dateTime is string
           && data.status is string && (data.status == 'Scheduled' || data.status == 'Completed' || data.status == 'Cancelled')
-          && (data.notes is string ? data.notes.size() <= 1000 : true);
+          && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000));
     }
 
     function isValidMessage(data) {
@@ -94,7 +94,7 @@ service cloud.firestore {
           && data.senderType is string && (data.senderType == 'Parent' || data.senderType == 'Teacher')
           && data.content is string && data.content.size() <= 2000
           && data.timestamp is string
-          && (data.teacherName is string ? data.teacherName.size() <= 100 : true);
+          && (!('teacherName' in data) || (data.teacherName is string && data.teacherName.size() <= 100));
     }
 
     function isValidInvoice(data) {
@@ -105,7 +105,7 @@ service cloud.firestore {
           && data.amount is number
           && data.dueDate is string
           && data.status is string && (data.status == 'Paid' || data.status == 'Unpaid' || data.status == 'Overdue')
-          && (data.paymentDate is string ? data.paymentDate.size() <= 100 : true);
+          && (!('paymentDate' in data) || (data.paymentDate is string && data.paymentDate.size() <= 100));
     }
 
     // --- Students Collection ---

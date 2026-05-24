@@ -354,7 +354,9 @@ export default function App() {
     } catch (e: any) {
       console.error("Google authentication process rejected:", e);
       let errorMsg = "La connexion a échoué. Les popups ou les cookies tiers peuvent être bloqués.";
-      if (e?.code === 'auth/popup-blocked') {
+      if (e?.code === 'auth/popup-closed-by-user') {
+        errorMsg = "La fenêtre d'authentification Google a été fermée avant la fin de la connexion. N'hésitez pas à utiliser le mode Invité (Démo) ci-dessous si vous préférez tester sans compte.";
+      } else if (e?.code === 'auth/popup-blocked') {
         errorMsg = "Le popup de connexion Google a été bloqué par votre navigateur. Veuillez autoriser les popups ou ouvrir l'application dans un nouvel onglet.";
       } else if (e?.code === 'auth/network-request-failed') {
         errorMsg = "Erreur réseau. Veuillez vérifier votre connexion internet.";
