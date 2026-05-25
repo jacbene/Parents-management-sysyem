@@ -1,20 +1,37 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Parents Management System (Pasma-sys)
 
-# Run and deploy your AI Studio app
+Un portail scolaire moderne et complet destiné aux parents d'élèves pour suivre l'activité de leurs enfants, gérer les cotisations de l'Association des Parents d'Élèves et d'Enseignants (APEE), et communiquer facilement avec l'établissement.
 
-This contains everything you need to run your app locally.
+## 🚀 Fonctionnalités Clés
 
-View your app in AI Studio: https://ai.studio/apps/a76095ec-7323-4938-ad10-394b9712f70f
+- **Gestion des Cotisations (APEE) :** Suivi rigoureux des fiches de cotisations des parents, génération automatique de reçus PDF, relances automatiques par SMS/WhatsApp et archivage sécurisé.
+- **Enseignants Titulaires :** Configuration dynamique des professeurs titulaires par classe, avec possibilité d'ajouter des classes sur-mesure.
+- **Suivi Scolaire en Temps Réel :** Consultation des notes par trimestre, des relevés d'absences, du cahier de texte (devoirs) et de l'emploi du temps.
+- **Facturation & Cantine :** Paiement et suivi des cotisations d'inscription, de la cantine et du transport scolaire.
+- **Boîte de Réception Intégrée :** Messagerie sécurisée pour dialoguer directement avec les professeurs principaux et l'administration scolaire.
 
-## Run Locally
+## 🛠️ Stack Technique
 
-**Prerequisites:**  Node.js
+- **Frontend :** React 18, Vite, Tailwind CSS, Lucide Icons, Framer Motion.
+- **Base de données / Persistance :** Intégration Firebase Firestore & Firebase Auth (ou stockage local réactif en secours).
 
+## 💻 Installation et Développement
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Pour lancer le projet localement :
+
+1. Installez les dépendances :
+   ```bash
+   npm install
+   ```
+2. Lancez le serveur de développement :
+   ```bash
+   npm run dev
+   ```
+3. Compilez pour la production :
+   ```bash
+   npm run build
+   ```
+
+---
+
+*Ce projet est géré et édité via Google AI Studio et synchronisé sur le dépôt GitHub révisé : `jacbene/Parents-management-system`.*
