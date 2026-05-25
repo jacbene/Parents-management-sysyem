@@ -401,13 +401,28 @@ export default function App() {
     setMessages(prev => [...prev, newMsg]);
   };
 
+  const handleUpdateStudent = async (updated: Student) => {
+    setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
+    if (userId) {
+      try {
+        await setDoc(doc(db, 'students', updated.id), updated);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `students/${updated.id}`);
+      }
+    }
+    return true;
+  };
+
   const handleUpdateStudentInPlace = (updated: Student) => {
     setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
   };
 
   // Pedagogical & Academic Action Handlers (strictly authorized under checkPedAuthorization)
   const handleAddGrade = async (grade: Grade) => {
-    if (!checkPedAuthorization()) return false;
+    if (portalUserRole === 'parent') {
+      alert("Accès refusé: Les parents ne sont pas autorisés à modifier les relevés de notes.");
+      return false;
+    }
     setGrades(prev => [grade, ...prev]);
     if (userId) {
       try {
@@ -420,7 +435,10 @@ export default function App() {
   };
 
   const handleDeleteGrade = async (id: string) => {
-    if (!checkPedAuthorization()) return false;
+    if (portalUserRole === 'parent') {
+      alert("Accès refusé: Les parents ne sont pas autorisés à supprimer les relevés de notes.");
+      return false;
+    }
     setGrades(prev => prev.filter(g => g.id !== id));
     if (userId) {
       try {
@@ -776,7 +794,16 @@ export default function App() {
             {/* Top Navigation Bar */}
             <header className="bg-white border-b border-gray-150 py-3.5 px-6 sticky top-0 z-30 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="text-2xl bg-indigo-55 p-2 rounded-xl">🏫</span>
+                {apeeSettings.logoUrl ? (
+                  <img
+                    src={apeeSettings.logoUrl}
+                    alt="Logo Établissement"
+                    className="h-10 w-10 object-contain rounded-xl p-0.5 bg-slate-50 border border-slate-150 shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="text-2xl bg-indigo-55 p-2 rounded-xl shrink-0">🏫</span>
+                )}
                 <div>
                   <h1 className="text-base font-black tracking-tight text-gray-950 flex items-center gap-1">
                     Pasma-sys <span className="text-[10px] bg-slate-900 text-white font-mono px-1.5 py-0.5 rounded-full uppercase scale-90">ENT</span>
@@ -851,6 +878,7 @@ export default function App() {
                             onSelect={() => setSelectedStudentId(stu.id)}
                             onUpdateStudent={handleUpdateStudentInPlace}
                             onPrint={() => setPrintingStudent(stu)}
+                            settings={apeeSettings}
                           />
                         ))}
                       </div>
@@ -1335,6 +1363,8 @@ export default function App() {
                           pedManagerName={apeeSettings.pedManagerName}
                           hasPedPassword={!!apeeSettings.pedManagerPassword}
                           activeStudent={activeStudent}
+                          onUpdateStudent={handleUpdateStudent}
+                          onPrintReport={() => setPrintingStudent(activeStudent)}
                         />
                       </motion.div>
                     )}
@@ -1350,6 +1380,8 @@ export default function App() {
                           pedManagerName={apeeSettings.pedManagerName}
                           hasPedPassword={!!apeeSettings.pedManagerPassword}
                           activeStudent={activeStudent}
+                          onUpdateStudent={handleUpdateStudent}
+                          onPrintReport={() => setPrintingStudent(activeStudent)}
                         />
                       </motion.div>
                     )}
@@ -1451,6 +1483,7 @@ export default function App() {
           attendance={attendanceLogs.filter(a => a.studentId === printingStudent.id)}
           isOpen={!!printingStudent}
           onClose={() => setPrintingStudent(null)}
+          settings={apeeSettings}
         />
       )}
     </div>

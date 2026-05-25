@@ -13,11 +13,20 @@ interface BillingPortalProps {
 export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPortalProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'unpaid' | 'paid'>('all');
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
+  
+  // Payment Mode States
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'momo'>('card');
+  const [momoProvider, setMomoProvider] = useState<'mtn' | 'orange' | 'wave'>('mtn');
+  const [momoPhone, setMomoPhone] = useState('');
+  
+  // Card states
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
   const [cardholderName, setCardholderName] = useState('');
+  
   const [processing, setProcessing] = useState(false);
+  const [momoStep, setMomoStep] = useState<string>('');
   const [success, setSuccess] = useState(false);
 
   // Filter invoices
@@ -44,6 +53,9 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
     setExpiry('');
     setCvv('');
     setCardholderName('');
+    setMomoPhone('');
+    setPaymentMethod('card');
+    setMomoStep('');
     setSuccess(false);
   };
 
@@ -53,11 +65,21 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
 
     setProcessing(true);
 
-    // Simulate payment processing time
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    if (paymentMethod === 'momo') {
+      const providerLabel = momoProvider === 'mtn' ? 'MTN MoMo' : momoProvider === 'orange' ? 'Orange Money' : 'Wave';
+      setMomoStep(`Envoi de la notification Push vers ${momoPhone}...`);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      setMomoStep(`Attente de confirmation du code PIN par l'utilisateur sur ${providerLabel}...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      setMomoStep(`Validation de la transaction en cours...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
 
     try {
-      const parentIdPart = payingInvoice.parentId;
       const invRef = doc(db, 'invoices', payingInvoice.id);
       const paidDate = new Date().toISOString().split('T')[0];
 
@@ -80,6 +102,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
       handleFirestoreError(err, OperationType.UPDATE, `invoices/${payingInvoice.id}`);
     } finally {
       setProcessing(false);
+      setMomoStep('');
     }
   };
 
@@ -92,7 +115,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
             Régie Financière & Facturation
           </h2>
           <p className="text-sm text-gray-500">
-            Paiement sécurisé en ligne des frais de scolarité, de cantine et d'activités périscolaires.
+            Paiement sécurisé en ligne des frais de scolarité, de cantine, d'APEE et d'activités périscolaires.
           </p>
         </div>
 
@@ -174,7 +197,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                     onClick={() => startPayment(inv)}
                     className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer hover:bg-indigo-700 transition"
                   >
-                    <CreditCard className="h-3.5 w-3.5" /> Payer
+                    <CreditCard className="h-3.5 w-3.5" /> Payer ma dette
                   </button>
                 )}
               </div>
@@ -191,7 +214,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl w-full max-w-md border border-gray-100 shadow-2xl overflow-hidden"
+              className="bg-white rounded-3xl w-full max-w-md border border-gray-100 shadow-2xl overflow-hidden animate-fade-in"
             >
               <div className="p-5 bg-slate-900 text-white relative">
                 <button
@@ -207,6 +230,32 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                 </div>
               </div>
 
+              {/* Payment Method Selector Tab */}
+              {!success && (
+                <div className="grid grid-cols-2 border-b border-gray-100 bg-gray-50">
+                  <button
+                    onClick={() => setPaymentMethod('card')}
+                    className={`py-3 text-xs font-bold text-center border-b-2 cursor-pointer transition ${
+                      paymentMethod === 'card'
+                        ? 'border-indigo-600 text-indigo-650 bg-white'
+                        : 'border-transparent text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    💳 Carte Visa / Mastercard
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod('momo')}
+                    className={`py-3 text-xs font-bold text-center border-b-2 cursor-pointer transition ${
+                      paymentMethod === 'momo'
+                        ? 'border-indigo-600 text-indigo-650 bg-white'
+                        : 'border-transparent text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    📱 Mobile Money (Orange, MTN, Wave)
+                  </button>
+                </div>
+              )}
+
               <div className="p-6 space-y-5">
                 {success ? (
                   <motion.div
@@ -216,96 +265,158 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                   >
                     <CheckCircle2 className="h-14 w-14 text-emerald-500 mx-auto animate-bounce" />
                     <h4 className="text-base font-bold text-gray-900">Règlement Validé !</h4>
-                    <p className="text-xs text-gray-500">Un reçu fiscal vous a été envoyé par messagerie électronique.</p>
+                    <p className="text-xs text-gray-500">Un reçu fiscal APEE vous a été envoyé par messagerie électronique.</p>
                   </motion.div>
                 ) : (
                   <form onSubmit={handleSimulatedPayment} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-gray-600 block">Titulaire de la carte</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="M. ou Mme Martin"
-                        value={cardholderName}
-                        onChange={(e) => setCardholderName(e.target.value)}
-                        className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500"
-                      />
-                    </div>
+                    {paymentMethod === 'card' ? (
+                      <div className="space-y-4 animate-fade-in">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-gray-600 block">Titulaire de la carte</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="M. ou Mme Martin"
+                            value={cardholderName}
+                            onChange={(e) => setCardholderName(e.target.value)}
+                            className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500"
+                          />
+                        </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-gray-600 block">Numéro de carte bancaire</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          required
-                          maxLength={19}
-                          placeholder="4970 8593 1039 4820"
-                          value={cardNumber}
-                          onChange={(e) => {
-                            // Format card with spaces
-                            const v = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-                            const matches = v.match(/\d{4,16}/g);
-                            const match = (matches && matches[0]) || '';
-                            const parts = [];
-                            for (let i = 0, len = match.length; i < len; i += 4) {
-                              parts.push(match.substring(i, i + 4));
-                            }
-                            if (parts.length > 0) {
-                              setCardNumber(parts.join(' '));
-                            } else {
-                              setCardNumber(v);
-                            }
-                          }}
-                          className="w-full pl-10 pr-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
-                        />
-                        <CreditCard className="h-4 w-4 text-gray-400 absolute left-3.5 top-3" />
-                      </div>
-                    </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-gray-600 block">Numéro de carte bancaire</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              required
+                              placeholder="4970 8593 1039 4820"
+                              value={cardNumber}
+                              onChange={(e) => {
+                                const v = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+                                setCardNumber(v.substring(0, 16).replace(/(.{4})/g, '$1 ').trim());
+                              }}
+                              className="w-full pl-10 pr-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
+                            />
+                            <CreditCard className="h-4 w-4 text-gray-400 absolute left-3.5 top-3" />
+                          </div>
+                        </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-600 block">Date d'expiration</label>
-                        <input
-                          type="text"
-                          required
-                          maxLength={5}
-                          placeholder="MM/AA"
-                          value={expiry}
-                          onChange={(e) => {
-                            let v = e.target.value.replace(/[^0-9]/gi, '');
-                            if (v.length > 2) {
-                              v = `${v.slice(0, 2)}/${v.slice(2, 4)}`;
-                            }
-                            setExpiry(v);
-                          }}
-                          className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
-                        />
-                      </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-600 block">Date d'expiration</label>
+                            <input
+                              type="text"
+                              required
+                              maxLength={5}
+                              placeholder="MM/AA"
+                              value={expiry}
+                              onChange={(e) => {
+                                let v = e.target.value.replace(/[^0-9]/gi, '');
+                                if (v.length > 2) {
+                                  v = `${v.slice(0, 2)}/${v.slice(2, 4)}`;
+                                }
+                                setExpiry(v);
+                              }}
+                              className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
+                            />
+                          </div>
 
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-600 block">CVV / CVC</label>
-                        <input
-                          type="password"
-                          required
-                          maxLength={3}
-                          placeholder="853"
-                          value={cvv}
-                          onChange={(e) => setCvv(e.target.value.replace(/[^0-9]/gi, ''))}
-                          className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
-                        />
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-600 block">CVV / CVC</label>
+                            <input
+                              type="password"
+                              required
+                              maxLength={3}
+                              placeholder="853"
+                              value={cvv}
+                              onChange={(e) => setCvv(e.target.value.replace(/[^0-9]/gi, ''))}
+                              className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      /* Mobile Money Selection Option */
+                      <div className="space-y-4 animate-fade-in">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-gray-600 block">Sélectionnez votre opérateur</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setMomoProvider('mtn')}
+                              className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1 cursor-pointer ${
+                                momoProvider === 'mtn'
+                                  ? 'bg-amber-50 border-amber-500 text-amber-850'
+                                  : 'bg-white border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center font-black text-[10px] text-gray-900 border border-yellow-500">M</div>
+                              <span className="text-[10px] font-black uppercase">MTN MoMo</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMomoProvider('orange')}
+                              className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1 cursor-pointer ${
+                                momoProvider === 'orange'
+                                  ? 'bg-orange-50 border-orange-500 text-orange-850'
+                                  : 'bg-white border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center font-black text-[10px] text-white border border-orange-600">O</div>
+                              <span className="text-[10px] font-black uppercase">Orange</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMomoProvider('wave')}
+                              className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1 cursor-pointer ${
+                                momoProvider === 'wave'
+                                  ? 'bg-sky-50 border-sky-500 text-sky-850'
+                                  : 'bg-white border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="w-5 h-5 rounded-full bg-sky-400 flex items-center justify-center font-black text-[10px] text-white border border-sky-500">W</div>
+                              <span className="text-[10px] font-black uppercase">Wave</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-gray-600 block">Numéro de téléphone payeur</label>
+                          <input
+                            type="tel"
+                            required
+                            placeholder="Ex: +237 677 88 99 00"
+                            value={momoPhone}
+                            onChange={(e) => setMomoPhone(e.target.value)}
+                            className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
+                          />
+                          <p className="text-[9.5px] text-gray-400">
+                            Une notification de validation de transaction de {payingInvoice.amount.toFixed(2)} € sera immédiatement envoyée sur ce numéro de mobile.
+                          </p>
+                        </div>
+
+                        {processing && momoStep && (
+                          <div className="p-3 bg-indigo-50 border border-indigo-150 rounded-xl space-y-1.5 animate-pulse">
+                            <span className="text-[9.5px] uppercase font-black tracking-widest text-indigo-700 block">🔗 Transaction Mobile Money en Cours</span>
+                            <div className="text-xs text-indigo-900 font-semibold flex items-center gap-1.5">
+                              <span className="h-2 w-2 rounded-full bg-indigo-650 animate-ping shrink-0" />
+                              {momoStep}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="pt-2">
                       <button
                         type="submit"
                         disabled={processing}
-                        className="w-full py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 disabled:opacity-50 transition flex items-center justify-center gap-2 cursor-pointer"
+                        className="w-full py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-850 disabled:opacity-50 transition flex items-center justify-center gap-2 cursor-pointer"
                       >
                         {processing ? (
                           <>
                             <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Traitement bancaire de l'opération...
+                            Traitement en cours...
                           </>
                         ) : (
                           <>
@@ -316,7 +427,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                       </button>
                     </div>
 
-                    <div className="text-center font-mono text-[10px] text-gray-400 flex items-center justify-center gap-1">
+                    <div className="text-center font-mono text-[9.5px] text-gray-400 flex items-center justify-center gap-1 select-none">
                       <ShieldCheck className="h-3 w-3 text-emerald-500" /> Standard Chiffrement Fort SSL 256 bits garanti
                     </div>
                   </form>

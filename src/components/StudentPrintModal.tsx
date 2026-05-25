@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Student, Grade, Attendance } from '../types';
+import { Student, Grade, Attendance, ApeeSettings } from '../types';
 import { 
   X, 
   Printer, 
@@ -16,7 +16,8 @@ import {
   NotebookPen,
   Download,
   BarChart2,
-  TrendingUp
+  TrendingUp,
+  Phone
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 
@@ -26,10 +27,23 @@ interface StudentPrintModalProps {
   attendance: Attendance[];
   isOpen: boolean;
   onClose: () => void;
+  settings?: ApeeSettings;
 }
 
-export default function StudentPrintModal({ student, grades, attendance, isOpen, onClose }: StudentPrintModalProps) {
+export default function StudentPrintModal({ student, grades, attendance, isOpen, onClose, settings }: StudentPrintModalProps) {
   const [showChart, setShowChart] = useState(true);
+
+  // Find titular teacher for student's classroom in global ApeeSettings
+  const foundTeacher = settings?.classTeachers?.find(t => {
+    const classRoomName = student.classRoom || '';
+    return t.classRoom.toLowerCase() === classRoomName.toLowerCase() || 
+           classRoomName.toLowerCase().includes(t.classRoom.toLowerCase()) ||
+           t.classRoom.toLowerCase().includes(classRoomName.toLowerCase());
+  });
+
+  const teacherName = foundTeacher?.teacherName || student.teacherName || 'Enseignant principal';
+  const teacherEmail = foundTeacher?.teacherEmail || student.teacherEmail || '';
+  const teacherPhone = foundTeacher?.teacherPhone || '';
 
   useEffect(() => {
     // Disable main window scroll when open
@@ -325,8 +339,13 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
                 <div className="md:col-span-5 border-t md:border-t-0 md:border-l border-slate-200 pt-3 md:pt-0 md:pl-5 space-y-1 text-xs text-slate-700">
                   <span className="text-[9px] uppercase font-black text-slate-400 tracking-wider block">Superviseur Pédagogique</span>
                   <div className="font-medium space-y-1 text-[11px]">
-                    <p className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-gray-400" /> Enseignant principal : <strong>{student.teacherName}</strong></p>
-                    <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-gray-400" /> Email direct : <strong className="font-mono text-slate-600">{student.teacherEmail}</strong></p>
+                    <p className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-gray-400" /> Enseignant principal : <strong>{teacherName}</strong></p>
+                    {teacherPhone && (
+                      <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-gray-400" /> Téléphone : <strong className="font-mono text-slate-600">{teacherPhone}</strong></p>
+                    )}
+                    {teacherEmail && (
+                      <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-gray-400" /> Email direct : <strong className="font-mono text-slate-600">{teacherEmail}</strong></p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -521,11 +540,17 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
               {/* Administrative signatures spaces for print output only */}
               <div className="grid grid-cols-3 gap-6 pt-12 items-start text-center text-xs font-sans">
                 <div className="space-y-16">
-                  <p className="font-bold text-slate-800">Enseignant Principal</p>
+                  <div>
+                    <p className="font-bold text-slate-800">Enseignant Principal</p>
+                    <p className="text-[10px] text-slate-500 mt-1 font-medium">{teacherName}</p>
+                  </div>
                   <div className="border-t border-slate-300 mx-auto w-36 pt-1 text-[10px] text-gray-400">Signature & Date</div>
                 </div>
                 <div className="space-y-16">
-                  <p className="font-bold text-slate-800">Le Directeur d'Établissement</p>
+                  <div>
+                    <p className="font-bold text-slate-800">Le Directeur d'Établissement</p>
+                    {settings?.directorName && <p className="text-[10px] text-slate-500 mt-1 font-medium">{settings.directorName}</p>}
+                  </div>
                   <div className="border-t border-slate-300 mx-auto w-36 pt-1 text-[10px] text-gray-400">Cachet officiel</div>
                 </div>
                 <div className="space-y-16">

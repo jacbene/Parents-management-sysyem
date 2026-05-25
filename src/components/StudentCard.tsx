@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Student } from '../types';
+import { Student, ApeeSettings } from '../types';
 import { Mail, GraduationCap, Calendar, User, UserCheck, Camera, Printer } from 'lucide-react';
 import { motion } from 'motion/react';
 import StudentCameraModal from './StudentCameraModal';
@@ -11,14 +11,26 @@ interface StudentCardProps {
   onSelect: () => void;
   onUpdateStudent?: (updated: Student) => void;
   onPrint?: () => void;
+  settings?: ApeeSettings;
 }
 
 const isImageAvatar = (avatar: string) => {
   return avatar.startsWith('data:image') || avatar.startsWith('http') || avatar.startsWith('/');
 };
 
-export default function StudentCard({ student, isSelected, onSelect, onUpdateStudent, onPrint }: StudentCardProps) {
+export default function StudentCard({ student, isSelected, onSelect, onUpdateStudent, onPrint, settings }: StudentCardProps) {
   const [showCamera, setShowCamera] = useState(false);
+
+  // Find titular teacher for classroom in settings
+  const foundTeacher = settings?.classTeachers?.find(t => {
+    const classRoomName = student.classRoom || '';
+    return t.classRoom.toLowerCase() === classRoomName.toLowerCase() || 
+           classRoomName.toLowerCase().includes(t.classRoom.toLowerCase()) ||
+           t.classRoom.toLowerCase().includes(classRoomName.toLowerCase());
+  });
+
+  const teacherName = foundTeacher?.teacherName || student.teacherName || 'Enseignant principal';
+  const teacherEmail = foundTeacher?.teacherEmail || student.teacherEmail || '';
 
   return (
     <>
@@ -78,11 +90,11 @@ export default function StudentCard({ student, isSelected, onSelect, onUpdateStu
             <div className="pt-2 border-t border-dashed mt-2 border-white/10 space-y-1 text-xs">
               <div className={`flex items-center gap-1.5 ${isSelected ? 'text-indigo-100' : 'text-gray-500'}`}>
                 <User className="h-3 w-3 shrink-0" />
-                <span className="truncate">Enseignant : <strong className={isSelected ? 'text-white' : 'text-gray-700'}>{student.teacherName}</strong></span>
+                <span className="truncate">Enseignant : <strong className={isSelected ? 'text-white' : 'text-gray-700'}>{teacherName}</strong></span>
               </div>
               <div className={`flex items-center gap-1.5 ${isSelected ? 'text-indigo-100' : 'text-gray-500'}`}>
                 <Mail className="h-3 w-3 shrink-0" />
-                <span className="truncate">{student.teacherEmail}</span>
+                <span className="truncate">{teacherEmail}</span>
               </div>
               <div className={`flex items-center gap-1.5 ${isSelected ? 'text-indigo-100' : 'text-gray-500'}`}>
                 <Calendar className="h-3 w-3 shrink-0" />

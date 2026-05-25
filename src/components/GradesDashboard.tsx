@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Grade, Student } from '../types';
-import { Award, BookOpen, TrendingUp, Sparkles, Filter, Plus, Trash2, Lock, Unlock, CheckCircle } from 'lucide-react';
+import { Award, BookOpen, TrendingUp, Sparkles, Filter, Plus, Trash2, Lock, Unlock, CheckCircle, Printer } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
@@ -13,6 +13,8 @@ interface GradesDashboardProps {
   pedManagerName?: string;
   hasPedPassword?: boolean;
   activeStudent?: Student | null;
+  onUpdateStudent?: (updated: Student) => Promise<boolean>;
+  onPrintReport?: () => void;
 }
 
 export default function GradesDashboard({
@@ -24,6 +26,8 @@ export default function GradesDashboard({
   pedManagerName = '',
   hasPedPassword = false,
   activeStudent,
+  onUpdateStudent,
+  onPrintReport,
 }: GradesDashboardProps) {
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   
@@ -69,9 +73,50 @@ export default function GradesDashboard({
     return 'bg-red-50 border-red-200 text-red-800';
   };
 
+  // Helper to verify that the active user is the student's titular teacher
+  const verifyTeacherIdentity = (): boolean => {
+    if (!activeStudent) return false;
+    
+    // 1. Check if grades are officially validated first
+    if (activeStudent.gradesValidated) {
+      alert("🔒 Impossible de modifier : Ce bulletin de notes a été officiellement validé par le responsable pédagogique et ne peut plus subir de modification.");
+      return false;
+    }
+
+    const expectedName = activeStudent.teacherName || "Enseignant principal";
+    const expectedEmail = activeStudent.teacherEmail || "";
+    
+    // Check session cache
+    const saved = sessionStorage.getItem('active_teacher_identity');
+    if (saved && (
+      saved.toLowerCase().trim() === expectedName.toLowerCase().trim() ||
+      saved.toLowerCase().trim() === expectedEmail.toLowerCase().trim()
+    )) {
+      return true;
+    }
+
+    const inputName = prompt(
+      `🔒 Sécurité Enseignant Titulaire\nSeul le professeur titulaire (${expectedName}) est autorisé à modifier ces notes.\n\nVeuillez saisir votre Nom d'enseignant pour confirmer votre identité :`
+    );
+    if (!inputName) return false;
+
+    const queryLower = inputName.trim().toLowerCase();
+    if (
+      queryLower === expectedName.toLowerCase().trim() ||
+      queryLower === expectedEmail.toLowerCase().trim() ||
+      expectedName.toLowerCase().includes(queryLower) ||
+      queryLower.includes(expectedName.toLowerCase().trim())
+    ) {
+      sessionStorage.setItem('active_teacher_identity', inputName.trim());
+      return true;
+    } else {
+      alert(`Accès refusé.\nVous avez saisi : "${inputName}".\nL'enseignant titulaire enregistré pour ${activeStudent.name} est : "${expectedName}".`);
+      return false;
+    }
+  };
+
   const handleOpenForm = () => {
-    if (hasPedPassword && !isPedAuthorized && onPromptUnlockPed) {
-      onPromptUnlockPed();
+    if (!verifyTeacherIdentity()) {
       return;
     }
     setGradeDate(new Date().toISOString().split('T')[0]);
@@ -84,12 +129,19 @@ export default function GradesDashboard({
       alert('Veuillez sélectionner un élève avant de pouvoir introduire des notes.');
       return;
     }
+    
+    // Double check validity and lock
+    if (activeStudent.gradesValidated) {
+      alert("🔒 Impossible d'enregistrer : Le bulletin de notes est validé.");
+      return;
+    }
+
     if (!examName.trim()) {
       alert("Veuillez spécifier l'intitulé de l'évaluation.");
       return;
     }
     if (score < 0 || maxScore <= 0 || score > maxScore) {
-      alert("La note saisie doit être entre 0 et la note maximale configured.");
+      alert("La note saisie doit être entre 0 et la note maximale configurée.");
       return;
     }
 
@@ -116,13 +168,28 @@ export default function GradesDashboard({
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (hasPedPassword && !isPedAuthorized && onPromptUnlockPed) {
-      onPromptUnlockPed();
+    if (!verifyTeacherIdentity()) {
       return;
     }
     const confirm = window.confirm(`Voulez-vous supprimer l'évaluation "${name}" ?`);
     if (confirm && onDeleteGrade) {
       await onDeleteGrade(id);
+    }
+  };
+
+  const handleToggleValidation = async () => {
+    if (!activeStudent || !onUpdateStudent) return;
+    const isCurrentlyValidated = !!activeStudent.gradesValidated;
+    const confirmMsg = isCurrentlyValidated 
+      ? `Voulez-vous invalider (déverrouiller) le bulletin de notes pour ${activeStudent.name} ? Cela permettra à nouveau les modifications par son enseignant.`
+      : `Voulez-vous valider officiellement le bulletin de notes pour ${activeStudent.name} ? Une fois validé, plus aucune note ne pourra être ajoutée ou supprimée.`;
+    
+    if (window.confirm(confirmMsg)) {
+      const updated: Student = {
+        ...activeStudent,
+        gradesValidated: !isCurrentlyValidated
+      };
+      await onUpdateStudent(updated);
     }
   };
 
@@ -139,17 +206,48 @@ export default function GradesDashboard({
           </p>
         </div>
 
-        <button
-          onClick={handleOpenForm}
-          className="px-4 py-2 bg-slate-900 hover:bg-slate-850 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-        >
-          <Plus className="h-4 w-4" /> Introduire Note
-        </button>
+        <div className="flex items-center gap-2">
+          {onPrintReport && (
+            <button
+              onClick={onPrintReport}
+              className="px-4 py-2 bg-white text-gray-700 border border-gray-250 hover:bg-gray-50 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+            >
+              <Printer className="h-4 w-4" /> Imprimer le Bulletin
+            </button>
+          )}
+
+          <button
+            onClick={handleOpenForm}
+            disabled={!!activeStudent?.gradesValidated}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
+              activeStudent?.gradesValidated
+                ? 'bg-slate-100 text-slate-400 border border-slate-205 cursor-not-allowed'
+                : 'bg-slate-900 hover:bg-slate-850 text-white'
+            }`}
+          >
+            <Plus className="h-4 w-4" /> Introduire Note
+          </button>
+        </div>
       </div>
+
+      {/* Validated Bulletin Banner locked status */}
+      {activeStudent?.gradesValidated && (
+        <div className="p-4 rounded-2xl border bg-amber-50/50 text-amber-950 border-amber-250 text-xs flex items-center gap-3 animate-fade-in shadow-2xs">
+          <Lock className="h-5 w-5 text-amber-600 shrink-0" />
+          <div className="space-y-0.5">
+            <span className="font-extrabold uppercase tracking-wide text-[10px] text-amber-800 flex items-center gap-1">
+              🔒 Bulletin de Notes Officiellement Validé & Scellé
+            </span>
+            <p className="font-medium text-amber-900">
+              Le responsable pédagogique a validé le relevé de notes pour <strong>{activeStudent.name}</strong>. Plus aucune modification, ajout ou suppression de note n'est autorisée.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Security Status Header */}
       {hasPedPassword && (
-        <div className={`p-3.5 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+        <div className={`p-4 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
           isPedAuthorized ? 'bg-emerald-50 text-emerald-950 border-emerald-150' : 'bg-slate-50 text-slate-800 border-slate-150'
         }`}>
           <div className="flex items-center gap-2">
@@ -160,23 +258,40 @@ export default function GradesDashboard({
             )}
             <div>
               <span className="font-extrabold flex items-center gap-1.5 uppercase tracking-wide text-[10px] text-slate-650">
-                {isPedAuthorized ? '🔓 Accès Officiel Débloqué' : '🔒 Bulletin de Notes Verrouillé (Lecture Seule)'}
+                {isPedAuthorized ? '🔓 Mode Responsable Débloqué' : '🔒 Niveau de Sécurité Responsable Pédagogique'}
               </span>
               <p className="font-medium text-slate-600 mt-0.5">
                 {isPedAuthorized 
-                  ? `Vous agissez en qualité de : ${pedManagerName || "Principal Responsable Pédagogique"}`
-                  : `L'introduction ou la suppression de notes officielles requiert le mot de passe du Surveillant ou Censeur.`}
+                  ? `Qualité accréditée : ${pedManagerName || "Surveillant Général / Censeur"}`
+                  : `La validation ou l'invalidation officielle du bulletin de l'élève requiert le mot de passe de direction.`}
               </p>
             </div>
           </div>
-          {!isPedAuthorized && onPromptUnlockPed && (
-            <button
-              onClick={onPromptUnlockPed}
-              className="px-3 py-1.5 bg-white text-slate-800 border border-slate-250 font-bold rounded-lg text-[10px] hover:bg-slate-50 uppercase tracking-wider transition cursor-pointer shrink-0"
-            >
-              Saisir mot de passe
-            </button>
-          )}
+          
+          <div className="flex items-center gap-2">
+            {isPedAuthorized && activeStudent && (
+              <button
+                type="button"
+                onClick={handleToggleValidation}
+                className={`px-3 py-1.5 font-bold rounded-lg text-[10px] uppercase tracking-wider transition cursor-pointer shrink-0 border ${
+                  activeStudent.gradesValidated 
+                    ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' 
+                    : 'bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-700'
+                }`}
+              >
+                {activeStudent.gradesValidated ? '🔓 Invalider le Bulletin' : '🔒 Valider le Bulletin'}
+              </button>
+            )}
+
+            {!isPedAuthorized && onPromptUnlockPed && (
+              <button
+                onClick={onPromptUnlockPed}
+                className="px-3 py-1.5 bg-white text-slate-800 border border-slate-250 font-bold rounded-lg text-[10px] hover:bg-slate-50 uppercase tracking-wider transition cursor-pointer shrink-0"
+              >
+                Saisir mot de passe
+              </button>
+            )}
+          </div>
         </div>
       )}
 

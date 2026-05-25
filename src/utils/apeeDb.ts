@@ -181,6 +181,14 @@ export async function fetchApeeData(parentId: string) {
         } catch (e) {
           console.error("Failed to parse budgetLinesList from Firestore", e);
         }
+        let teachers = [];
+        try {
+          if (data.classTeachersList) {
+            teachers = JSON.parse(data.classTeachersList);
+          }
+        } catch (e) {
+          console.error("Failed to parse classTeachersList from Firestore", e);
+        }
         dbSettings = {
           associationName: data.title,
           cotisationAmount: data.amount,
@@ -193,6 +201,15 @@ export async function fetchApeeData(parentId: string) {
           pedManagerName: data.pedManagerName || '',
           pedManagerPhone: data.pedManagerPhone || '',
           pedManagerPassword: data.pedManagerPassword || '',
+          logoUrl: data.logoUrl || '',
+          directorName: data.directorName || '',
+          directorPhone: data.directorPhone || '',
+          directorEmail: data.directorEmail || '',
+          surveillantName: data.surveillantName || '',
+          surveillantPhone: data.surveillantPhone || '',
+          censeurName: data.censeurName || '',
+          censeurPhone: data.censeurPhone || '',
+          classTeachers: teachers,
         };
       }
     });
@@ -243,6 +260,15 @@ export async function saveApeeSettings(parentId: string, settings: ApeeSettings)
       pedManagerName: settings.pedManagerName || '',
       pedManagerPhone: settings.pedManagerPhone || '',
       pedManagerPassword: settings.pedManagerPassword || '',
+      logoUrl: settings.logoUrl || '',
+      directorName: settings.directorName || '',
+      directorPhone: settings.directorPhone || '',
+      directorEmail: settings.directorEmail || '',
+      surveillantName: settings.surveillantName || '',
+      surveillantPhone: settings.surveillantPhone || '',
+      censeurName: settings.censeurName || '',
+      censeurPhone: settings.censeurPhone || '',
+      classTeachersList: JSON.stringify(settings.classTeachers || []),
     });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'invoices/apee_settings');
