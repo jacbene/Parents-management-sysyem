@@ -71,6 +71,7 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
   const [lineDescription, setLineDescription] = useState('');
 
   // Success indicators
+  const [newClassName, setNewClassName] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('Paramètres enregistrés avec succès !');
 
@@ -745,14 +746,29 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
 
           <div className="space-y-4">
             {/* Scrollable teachers inputs list */}
-            <div className="max-h-[380px] overflow-y-auto pr-2 divide-y divide-slate-100 space-y-3.5">
+            <div className="max-h-[380px] overflow-y-auto pr-2 divide-y divide-slate-100 space-y-4">
               {classTeachers.map((teach, idx) => (
-                <div key={idx} className="pt-3.5 first:pt-0 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10.5px] font-black bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-lg">
-                      {teach.classRoom}
-                    </span>
-                    <span className="text-[10px] font-semibold text-slate-500 italic">Enseignant Titulaire</span>
+                <div key={idx} className="pt-4 first:pt-0 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10.5px] font-black bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-lg">
+                        {teach.classRoom}
+                      </span>
+                      <span className="text-[10px] font-semibold text-slate-500 italic">Enseignant Titulaire</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Voulez-vous vraiment supprimer la configuration pour la classe ${teach.classRoom} ?`)) {
+                          setClassTeachers(classTeachers.filter((_, idxFilter) => idxFilter !== idx));
+                        }
+                      }}
+                      className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition cursor-pointer"
+                      title={`Supprimer la classe ${teach.classRoom}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -801,6 +817,41 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Form to add a new classroom division */}
+            <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 flex gap-2 items-end">
+              <div className="flex-1 space-y-1">
+                <label className="text-[9px] font-bold text-slate-600 uppercase">Ajouter une classe sur-mesure</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 6ème A, 4ème ALL 2, CM2..."
+                  value={newClassName}
+                  onChange={(e) => setNewClassName(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-indigo-500"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newClassName.trim()) {
+                    alert("Le nom de la classe ne peut pas être vide.");
+                    return;
+                  }
+                  if (classTeachers.some(t => t.classRoom.trim().toLowerCase() === newClassName.trim().toLowerCase())) {
+                    alert("Cette classe existe déjà dans la liste.");
+                    return;
+                  }
+                  setClassTeachers([
+                    ...classTeachers,
+                    { classRoom: newClassName.trim(), teacherName: '', teacherPhone: '', teacherEmail: '' }
+                  ]);
+                  setNewClassName('');
+                }}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
+              >
+                <Plus className="h-3.5 w-3.5" /> Ajouter
+              </button>
             </div>
 
             <button

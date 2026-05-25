@@ -540,9 +540,8 @@ export default function App() {
     }
   };
 
-  const handleSaveApeeParentInPlace = async (parent: ApeeParent) => {
-    if (!checkApeeAuthorization()) return;
-    setActiveParentToEdit(null);
+  const handleSaveApeeParentInPlace = async (parent: ApeeParent): Promise<boolean> => {
+    if (!checkApeeAuthorization()) return false;
     setApeeParents(prev => {
       const idx = prev.findIndex(p => p.id === parent.id);
       if (idx !== -1) {
@@ -551,8 +550,14 @@ export default function App() {
       return [...prev, parent];
     });
     if (userId) {
-      await saveApeeParent(userId, parent);
+      try {
+        await saveApeeParent(userId, parent);
+      } catch (err) {
+        console.error("Failed to save APEE parent:", err);
+        return false;
+      }
     }
+    return true;
   };
 
   const handleDeleteApeeParentInPlace = async (id: string) => {

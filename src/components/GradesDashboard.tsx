@@ -565,6 +565,17 @@ export default function GradesDashboard({
                           <span className="text-[11px] font-mono text-gray-400">
                             {new Date(g.date).toLocaleDateString('fr-FR')}
                           </span>
+                          {activeStudent?.gradesValidated ? (
+                            <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1 select-none">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Validated
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1 select-none">
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                              Pending
+                            </span>
+                          )}
                         </div>
                         <h4 className="font-semibold text-gray-900 text-sm">
                           {g.examName}
