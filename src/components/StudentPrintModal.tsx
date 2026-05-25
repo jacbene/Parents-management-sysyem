@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Student, Grade, Attendance, ApeeSettings } from '../types';
+import { jsPDF } from 'jspdf';
 import { 
   X, 
   Printer, 
@@ -203,6 +204,474 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    let y = 15;
+    const margin = 15;
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const contentWidth = pageWidth - (2 * margin); // 180mm
+
+    const checkPageBreak = (heightNeeded: number) => {
+      if (y + heightNeeded > pageHeight - 20) {
+        doc.addPage();
+        drawPageHeaderFooter();
+        y = 25; // Reset y to top margin on new page
+      }
+    };
+
+    const drawPageHeaderFooter = () => {
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(margin, 12, margin + contentWidth, 12);
+      
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text(`Bulletin de situation - ${student.name} - Classe : ${student.grade} ${student.classRoom}`, margin, 9);
+    };
+
+    // Elegant accent: Deep indigo header bar
+    doc.setFillColor(79, 70, 229); // Primary Indigo
+    doc.rect(margin, y, 4, 18, 'F');
+
+    // Title text
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(79, 70, 229);
+    doc.text("PORTAIL SCOLAIRE PASMA-SYS • BULLETIN SCOLAIRE", margin + 6, y + 4);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text("BILAN DE CONFIGURATION SCOLAIRE & NOTES", margin + 6, y + 12);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text(`Édité le ${new Date().toLocaleDateString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}`, margin + 6, y + 17);
+
+    y += 24;
+
+    // Student & Pedagogical Supervisor Card
+    doc.setFillColor(248, 250, 252); // Slate 50
+    doc.setDrawColor(226, 232, 240); // Slate 200
+    doc.setLineWidth(0.3);
+    doc.rect(margin, y, contentWidth, 34, 'FD'); // 34mm height
+
+    // Left block: Student details
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text(student.name.toUpperCase(), margin + 5, y + 7);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105); // Slate 600
+    doc.text(`Né(e) le: ${new Date(student.dob).toLocaleDateString('fr-FR', { dateStyle: 'long' })}`, margin + 5, y + 14);
+    doc.text(`Niveau / Classe: ${student.grade} • ${student.classRoom}`, margin + 5, y + 20);
+    
+    // Status badges or additional key
+    doc.setFillColor(238, 242, 255); // Indigo 100
+    doc.rect(margin + 5, y + 24, 45, 6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(79, 70, 229); // Indigo 700
+    doc.text("ÉLÈVE INSCRIT ET ACTIF", margin + 8, y + 28);
+
+    // Vertical separator line
+    doc.setDrawColor(203, 213, 225); // Slate 300
+    doc.line(margin + 90, y + 4, margin + 90, y + 30);
+
+    // Right block: Supervisor details
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text("SUPERVISEUR PÉDAGOGIQUE", margin + 95, y + 7);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105); // Slate 600
+    doc.text(`Professeur principal: ${teacherName}`, margin + 95, y + 14);
+    if (teacherPhone) {
+      doc.text(`Téléphone: ${teacherPhone}`, margin + 95, y + 20);
+    } else {
+      doc.text(`Téléphone: Non répertorié`, margin + 95, y + 20);
+    }
+    if (teacherEmail) {
+      doc.text(`E-mail: ${teacherEmail}`, margin + 95, y + 26);
+    } else {
+      doc.text(`E-mail: Non disponible`, margin + 95, y + 26);
+    }
+
+    y += 39;
+
+    // KPI widgets side-by-side
+    const colWidth = (contentWidth - 6) / 2; // 87mm each
+
+    // Card 1: Rendement Académique (Academic Performance)
+    doc.setFillColor(245, 247, 255); // Very soft indigo-tinted background
+    doc.setDrawColor(199, 210, 254); // Indigo 200
+    doc.rect(margin, y, colWidth, 26, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(79, 70, 229); // Indigo 700
+    doc.text("RENDEMENT ACADÉMIQUE", margin + 5, y + 6);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    const finalAvg = totalTests > 0 ? averageBase20.toFixed(2) : '--';
+    doc.text(`${finalAvg} / 20`, margin + 5, y + 15);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text(`Appréciation: ${totalTests > 0 ? apprec.text : 'Non évalué'}`, margin + 5, y + 22);
+
+    // Card 2: Assiduité (Attendance)
+    doc.setFillColor(240, 253, 244); // Very soft mint/green-tinted background
+    doc.setDrawColor(187, 247, 208); // Green 200
+    doc.rect(margin + colWidth + 6, y, colWidth, 26, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(22, 101, 52); // Green 850
+    doc.text("TAUX D'ASSIDUITÉ", margin + colWidth + 11, y + 6);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42); // Slate 950
+    doc.text(`${presenceRate}%`, margin + colWidth + 11, y + 15);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105); // Slate 600
+    doc.text(`${presentCount} Prés. | ${lateCount} Ret. | ${absentCount} Abs. | ${excusedCount} Exc.`, margin + colWidth + 11, y + 22);
+
+    y += 32;
+
+    // Averages per Subject (Bilan par Discipline)
+    if (subjectChartData.length > 0) {
+      checkPageBreak(35);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42); // Slate 900
+      doc.text("RÉCAPITULATIF DES MOYENNES PAR DISCIPLINE", margin, y + 5);
+      
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(margin, y + 7, margin + contentWidth, y + 7);
+      
+      y += 10;
+
+      // Table of averages
+      doc.setFillColor(241, 245, 249); // Slate 100
+      doc.rect(margin, y, contentWidth, 7, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(51, 65, 85); // Slate 700
+      doc.text("Discipline / Matière", margin + 4, y + 4.5);
+      doc.text("Moyenne obtenue", margin + 100, y + 4.5);
+      doc.text("Seuil d'admissibilité", margin + 140, y + 4.5);
+      
+      y += 7;
+
+      subjectChartData.forEach((row, rIdx) => {
+        checkPageBreak(7);
+        if (rIdx % 2 === 0) {
+          doc.setFillColor(248, 250, 252); // Slate 50
+          doc.rect(margin, y, contentWidth, 6, 'F');
+        }
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(15, 23, 42);
+        doc.text(row.subject, margin + 4, y + 4);
+        
+        const avgVal = row.Moyenne;
+        if (avgVal < 10) {
+          doc.setTextColor(239, 68, 68); // Red-500
+          doc.setFont('helvetica', 'bold');
+        } else {
+          doc.setTextColor(79, 70, 229); // Indigo-600
+          doc.setFont('helvetica', 'bold');
+        }
+        doc.text(`${avgVal.toFixed(2)} / 20`, margin + 100, y + 4);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        doc.text("10.00 / 20", margin + 140, y + 4);
+        
+        y += 6;
+      });
+      
+      y += 5;
+    }
+
+    // Detailed test-by-test report (TABLE DES ÉVALUATIONS DE NOTES)
+    checkPageBreak(25);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text("TABLEAU DÉTAILLÉ DES ÉVALUATIONS ET EXAMENS", margin, y + 5);
+    
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y + 7, margin + contentWidth, y + 7);
+    
+    y += 10;
+
+    // Detailed table headers
+    doc.setFillColor(79, 70, 229); // Primary Indigo header
+    doc.rect(margin, y, contentWidth, 8, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255); // White font
+    doc.text("Matière", margin + 3, y + 5);
+    doc.text("Examen", margin + 45, y + 5);
+    doc.text("Date", margin + 85, y + 5);
+    doc.text("Note / Barème", margin + 110, y + 5);
+    doc.text("Appréciation & Observations", margin + 135, y + 5);
+
+    y += 8;
+
+    const truncateString = (text: string, maxChars: number) => {
+      return text.length > maxChars ? text.substring(0, maxChars - 3) + '...' : text;
+    };
+
+    if (grades.length === 0) {
+      checkPageBreak(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text("Aucune note de contrôle enregistrée pour cet élève.", margin + 4, y + 5);
+      y += 8;
+    } else {
+      grades.forEach((g, gIdx) => {
+        checkPageBreak(8);
+
+        if (gIdx % 2 === 0) {
+          doc.setFillColor(248, 250, 252); // Slate 50
+          doc.rect(margin, y, contentWidth, 7, 'F');
+        }
+
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.15);
+        doc.line(margin, y + 7, margin + contentWidth, y + 7);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(15, 23, 42); // Slate 900
+        
+        doc.text(truncateString(g.subject, 18), margin + 3, y + 4.5);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85); // Slate 700
+        doc.text(truncateString(g.examName, 20), margin + 45, y + 4.5);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139); // Slate 500
+        doc.text(new Date(g.date).toLocaleDateString('fr-FR'), margin + 85, y + 4.5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(15, 23, 42); // Slate 900
+        doc.text(`${g.score} / ${g.maxScore}`, margin + 110, y + 4.5);
+
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139); // Slate 500
+        const remarks = g.teacherRemarks || "Aucun commentaire";
+        doc.text(truncateString(remarks, 24), margin + 135, y + 4.5);
+
+        y += 7;
+      });
+    }
+
+    y += 6;
+
+    // Detailed attendance report
+    checkPageBreak(25);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42); // Slate 950
+    doc.text("RAPPORT DU REGISTRE DE PRÉSENCE ET ASSIDUITÉ", margin, y + 5);
+    
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y + 7, margin + contentWidth, y + 7);
+    
+    y += 10;
+
+    // Attendance Table Header
+    doc.setFillColor(51, 65, 85); // Charcoal / Slate 700 header
+    doc.rect(margin, y, contentWidth, 8, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255); // White font
+    doc.text("Date du contrôle", margin + 3, y + 5);
+    doc.text("Statut de présence", margin + 55, y + 5);
+    doc.text("Motif justificatif / Remarques de la vie scolaire", margin + 100, y + 5);
+
+    y += 8;
+
+    if (attendance.length === 0) {
+      checkPageBreak(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text("Aucun retard ou absence répertorié au dossier de présence.", margin + 4, y + 5);
+      y += 8;
+    } else {
+      attendance.forEach((att, attIdx) => {
+        checkPageBreak(8);
+
+        if (attIdx % 2 === 0) {
+          doc.setFillColor(248, 250, 252); // Slate 50
+          doc.rect(margin, y, contentWidth, 7, 'F');
+        }
+
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.15);
+        doc.line(margin, y + 7, margin + contentWidth, y + 7);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(15, 23, 42); // Slate 900
+        doc.text(new Date(att.date).toLocaleDateString('fr-FR', { dateStyle: 'long' }), margin + 3, y + 4.5);
+
+        let statusFr = 'Présent';
+        if (att.status === 'Present') {
+          doc.setTextColor(22, 101, 52); // Green
+          statusFr = 'Présent';
+        } else if (att.status === 'Absent') {
+          doc.setTextColor(185, 28, 28); // Red
+          statusFr = 'Absent';
+        } else if (att.status === 'Late') {
+          doc.setTextColor(180, 83, 9); // Amber
+          statusFr = 'En Retard';
+        } else if (att.status === 'Excused') {
+          doc.setTextColor(79, 70, 229); // Indigo
+          statusFr = 'Justifié';
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.text(statusFr, margin + 55, y + 4.5);
+
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139); // Slate 500
+        const altRemark = att.remarks || (att.status === 'Present' ? 'Élève ponctuel et assidu' : 'Aucun motif renseigné');
+        doc.text(truncateString(altRemark, 42), margin + 100, y + 4.5);
+
+        y += 7;
+      });
+    }
+
+    y += 6;
+
+    // Administrative signatures block
+    checkPageBreak(40);
+    
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y + 5, margin + contentWidth, y + 5);
+
+    y += 12;
+
+    const signatureWidth = contentWidth / 3;
+
+    // Column 1: Teacher
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(51, 65, 85); // Slate 700
+    doc.text("L'Enseignant Principal", margin + (signatureWidth / 2), y, { align: 'center' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(teacherName, margin + (signatureWidth / 2), y + 5, { align: 'center' });
+
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.2);
+    doc.line(margin + 10, y + 22, margin + signatureWidth - 10, y + 22);
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Signature & Date", margin + (signatureWidth / 2), y + 26, { align: 'center' });
+
+    // Column 2: Principal/Director
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(51, 65, 85);
+    doc.text("Le Directeur d'Établissement", margin + signatureWidth + (signatureWidth / 2), y, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    const dName = settings?.directorName || 'Administration';
+    doc.text(dName, margin + signatureWidth + (signatureWidth / 2), y + 5, { align: 'center' });
+
+    doc.line(margin + signatureWidth + 10, y + 22, margin + 2 * signatureWidth - 10, y + 22);
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Cachet et signature", margin + signatureWidth + (signatureWidth / 2), y + 26, { align: 'center' });
+
+    // Column 3: Parents
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(51, 65, 85);
+    doc.text("Signature des Parents", margin + 2 * signatureWidth + (signatureWidth / 2), y, { align: 'center' });
+
+    doc.line(margin + 2 * signatureWidth + 10, y + 22, margin + 3 * signatureWidth - 10, y + 22);
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Mention 'Lu et Approuvé'", margin + 2 * signatureWidth + (signatureWidth / 2), y + 26, { align: 'center' });
+
+    y += 36;
+
+    // Footnote
+    checkPageBreak(18);
+    doc.setDrawColor(241, 245, 249);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, margin + contentWidth, y);
+    
+    y += 5;
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184); // Slate 400
+    doc.text("Ce bulletin de situation fait foi sous réserve de vérification physique auprès de la Direction d'École.", margin + (contentWidth / 2), y, { align: 'center' });
+    doc.text("Portail Scolaire Pasma-sys • Administré par Jacques Bene Mbama (+237 656 454 053).", margin + (contentWidth / 2), y + 4, { align: 'center' });
+
+    // Multi-page numbers numbering
+    const totalPages = (doc.internal as any).getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+       doc.setPage(i);
+       doc.setFont('helvetica', 'normal');
+       doc.setFontSize(7.5);
+       doc.setTextColor(148, 163, 184);
+       doc.text(`Page ${i} sur ${totalPages}`, margin + contentWidth, pageHeight - 8, { align: 'right' });
+       doc.text("PASMA-SYS ENT • BULLETIN TRIMESTRIEL DE L'ÉLÈVE", margin, pageHeight - 8);
+    }
+
+    const safePdfFileName = student.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    doc.save(`bulletin_${safePdfFileName}.pdf`);
   };
 
   const isImageAvatar = (avatar: string) => {
@@ -608,11 +1077,21 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
             </button>
             <button
               type="button"
-              onClick={handlePrint}
+              onClick={handleDownloadPDF}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition flex items-center gap-2 active:scale-97"
+              title="Télécharger le bulletin scolaire officiel au format PDF"
+            >
+              <Download className="h-4 w-4" />
+              <span>Télécharger le PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition flex items-center gap-2 active:scale-97"
+              title="Ouvrir la boîte de dialogue d'impression du navigateur pour ce dossier"
             >
               <Printer className="h-4 w-4" />
-              <span>Imprimer ou Enregistrer en PDF</span>
+              <span>Imprimer</span>
             </button>
           </div>
         </div>
