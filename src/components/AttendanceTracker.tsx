@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Attendance, AttendanceStatus, Student } from '../types';
-import { Calendar, CheckCircle2, XCircle, AlertCircle, Clock, Plus, Trash2, Lock, Unlock, Printer } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, AlertCircle, Clock, Plus, Trash2, Lock, Unlock, Printer, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AttendanceTrackerProps {
@@ -43,6 +43,45 @@ export default function AttendanceTracker({
   const attendanceRate = totalDays > 0
     ? (((presentDays + excusedDays + lateDays / 2) / totalDays) * 100).toFixed(0)
     : '100';
+
+  const handleExportCSV = () => {
+    if (attendanceLogs.length === 0) {
+      alert("Aucun émargement à exporter.");
+      return;
+    }
+
+    // Define headers
+    const headers = ["Date", "Statut", "Commentaire / Justification"];
+
+    // Format rows
+    const rows = attendanceLogs.map(log => {
+      const statusText = getStatusConfig(log.status).text;
+      const dateStr = log.date;
+      const remarksStr = log.remarks ? `"${log.remarks.replace(/"/g, '""')}"` : "";
+      return [dateStr, statusText, remarksStr];
+    });
+
+    // Excel-friendly UTF-8 with BOM to display French accents nicely
+    const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+
+    // Create a Blob and trigger a download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+
+    // Sanitize filename mapping
+    const studentNameClean = activeStudent?.name 
+      ? activeStudent.name.replace(/[^a-zA-Z0-9\s]/g, '_').trim()
+      : 'eleve';
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `assiduite_${studentNameClean}_${dateStr}.csv`;
+
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const getStatusConfig = (st: AttendanceStatus) => {
     switch (st) {
@@ -165,6 +204,16 @@ export default function AttendanceTracker({
         </div>
 
         <div className="flex items-center gap-2">
+          {attendanceLogs.length > 0 && (
+            <button
+              onClick={handleExportCSV}
+              className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-250 hover:bg-emerald-105 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs hover:text-emerald-800"
+              title="Exporter les présences sous format Excel/CSV"
+            >
+              <Download className="h-4 w-4 text-emerald-600" /> Exporter Excel/CSV
+            </button>
+          )}
+
           {onPrintReport && (
             <button
               onClick={onPrintReport}

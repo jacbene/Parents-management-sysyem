@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Printer, CheckCircle, Smartphone, Tag, User, Hash, MapPin, Notebook, DollarSign, Calendar, Mail, X, Download } from 'lucide-react';
 import { ApeeParent, ApeeStudentLink, ApeePaymentItem, ApeeSettings } from '../../types';
 import { jsPDF } from 'jspdf';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface ApeeFormProps {
   settings: ApeeSettings;
@@ -35,6 +36,8 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
   const [parentAddress, setParentAddress] = useState('');
   const [parentEmail, setParentEmail] = useState('');
   const [students, setStudents] = useState<ApeeStudentLink[]>([{ name: '', classRoom: defaultClassroom }]);
+  const [showPrintToast, setShowPrintToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const [note, setNote] = useState('');
   
   // Payment states
@@ -1076,7 +1079,11 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
                 <button
                   type="button"
                   onClick={() => {
-                    alert("Aperçu Système : L'impression brute directe du navigateur est lancée. Si votre navigateur la bloque, veuillez utiliser l'option 'Télécharger Reçu (PDF)' qui produit un fichier identique prêt à imprimer.");
+                    setToastMessage("Le module d'impression a été déclenché pour ce reçu de paiement. Si l'aperçu ne s'affiche pas, vérifiez vos permissions d'onglet.");
+                    setShowPrintToast(true);
+                    setTimeout(() => {
+                      setShowPrintToast(false);
+                    }, 5500);
                     window.print();
                   }}
                   className="px-3 py-2.5 bg-slate-700 hover:bg-slate-800 text-slate-200 hover:text-white rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1"
@@ -1089,6 +1096,32 @@ export default function ApeeForm({ settings, onSaveParent, activeParentToEdit, o
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {showPrintToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-24 right-6 z-[9999] bg-slate-900 border border-slate-700/50 text-white rounded-2xl p-4 shadow-xl flex items-center gap-3.5 max-w-sm no-print no-print-interface"
+          >
+            <div className="h-9 w-9 rounded-full bg-emerald-500/20 flex flex-center items-center justify-center text-emerald-400 border border-emerald-500/30 shrink-0">
+              <CheckCircle className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-slate-100">Impression lancée</h4>
+              <p className="text-[11px] text-slate-300 leading-normal mt-0.5">{toastMessage}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPrintToast(false)}
+              className="text-slate-400 hover:text-white transition p-1 hover:bg-slate-800 rounded-lg cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Student, Grade, Attendance, ApeeSettings } from '../types';
 import { jsPDF } from 'jspdf';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
   Printer, 
@@ -34,6 +35,8 @@ interface StudentPrintModalProps {
 export default function StudentPrintModal({ student, grades, attendance, isOpen, onClose, settings }: StudentPrintModalProps) {
   const [showChart, setShowChart] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
+  const [showPrintToast, setShowPrintToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -116,7 +119,11 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
   });
 
   const handlePrint = () => {
-    alert("Aperçu Système : L'impression brute du navigateur est lancée. Si jamais l'impression directe ne réagit pas à cause d'une restriction d'aperçu d'onglet sécurisé (iframe), veuillez cliquer sur 'Télécharger le PDF' juste à côté : il produit un bulletin identique haute résolution entièrement prêt à imprimer !");
+    setToastMessage("Report successfully sent to printer");
+    setShowPrintToast(true);
+    setTimeout(() => {
+      setShowPrintToast(false);
+    }, 5500);
     window.print();
   };
 
@@ -684,7 +691,7 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[1000] no-print">
+    <div className="StudentPrintModal fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[1000] no-print">
       
       {/* Print Style Injector */}
       <style dangerouslySetInnerHTML={{ __html: `
@@ -1086,26 +1093,42 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
             </button>
             <button
               type="button"
-              onClick={handleDownloadPDF}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition flex items-center gap-2 active:scale-97"
-              title="Télécharger le bulletin scolaire officiel au format PDF"
-            >
-              <Download className="h-4 w-4" />
-              <span>Télécharger le PDF</span>
-            </button>
-            <button
-              type="button"
               onClick={handlePrint}
-              className="bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition flex items-center gap-2 active:scale-97"
-              title="Ouvrir la boîte de dialogue d'impression du navigateur pour ce dossier"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition flex items-center gap-2 active:scale-97"
+              title="Lancer l'impression directe du rapport"
             >
               <Printer className="h-4 w-4" />
-              <span>Imprimer</span>
+              <span>Lancer l'Impression</span>
             </button>
           </div>
         </div>
 
       </div>
+
+      <AnimatePresence>
+        {showPrintToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-24 right-6 z-[3000] bg-slate-900 border border-slate-700/50 text-white rounded-2xl p-4 shadow-xl flex items-center gap-3.5 max-w-sm no-print no-print-interface"
+          >
+            <div className="h-9 w-9 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/30 shrink-0">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-emerald-400">Impression</h4>
+              <p className="text-[12px] font-semibold text-slate-100 leading-normal mt-0.5">{toastMessage}</p>
+            </div>
+            <button
+              onClick={() => setShowPrintToast(false)}
+              className="text-slate-400 hover:text-white transition p-1 hover:bg-slate-800 rounded-lg cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

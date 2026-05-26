@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Invoice } from '../types';
-import { CreditCard, ShieldCheck, CheckCircle2, AlertCircle, Sparkles, X, Landmark, Receipt } from 'lucide-react';
+import { CreditCard, ShieldCheck, CheckCircle2, AlertCircle, Sparkles, X, Landmark, Receipt, QrCode, Smartphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
@@ -15,9 +15,10 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
   
   // Payment Mode States
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'momo'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'momo' | 'qr'>('card');
   const [momoProvider, setMomoProvider] = useState<'mtn' | 'orange' | 'wave'>('mtn');
   const [momoPhone, setMomoPhone] = useState('');
+  const [qrProvider, setQrProvider] = useState<'mtn' | 'orange' | 'wave'>('mtn');
   
   // Card states
   const [cardNumber, setCardNumber] = useState('');
@@ -55,6 +56,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
     setCardholderName('');
     setMomoPhone('');
     setPaymentMethod('card');
+    setQrProvider('mtn');
     setMomoStep('');
     setSuccess(false);
   };
@@ -74,6 +76,16 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       setMomoStep(`Validation de la transaction en cours...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } else if (paymentMethod === 'qr') {
+      const providerLabel = qrProvider === 'mtn' ? 'MTN MoMo' : qrProvider === 'orange' ? 'Orange Money' : 'Wave';
+      setMomoStep(`Scan du code QR détecté par l'appareil mobile du parent...`);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      setMomoStep(`Traitement et vérification des détails de facturation de l'envoi (${providerLabel})...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      setMomoStep(`Règlement de ${payingInvoice.amount.toFixed(2)} € validé par l'opérateur local...`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     } else {
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -232,26 +244,42 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
 
               {/* Payment Method Selector Tab */}
               {!success && (
-                <div className="grid grid-cols-2 border-b border-gray-100 bg-gray-50">
+                <div className="grid grid-cols-3 border-b border-gray-100 bg-gray-50 text-[10px] sm:text-xs">
                   <button
+                    type="button"
                     onClick={() => setPaymentMethod('card')}
-                    className={`py-3 text-xs font-bold text-center border-b-2 cursor-pointer transition ${
+                    className={`py-3 font-bold text-center border-b-2 cursor-pointer transition flex items-center justify-center gap-1 ${
                       paymentMethod === 'card'
-                        ? 'border-indigo-600 text-indigo-650 bg-white'
+                        ? 'border-indigo-600 text-indigo-750 bg-white'
                         : 'border-transparent text-gray-500 hover:text-gray-800'
                     }`}
                   >
-                    💳 Carte Visa / Mastercard
+                    <CreditCard className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                    <span>Carte Visa/MC</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => setPaymentMethod('momo')}
-                    className={`py-3 text-xs font-bold text-center border-b-2 cursor-pointer transition ${
+                    className={`py-3 font-bold text-center border-b-2 cursor-pointer transition flex items-center justify-center gap-1 ${
                       paymentMethod === 'momo'
-                        ? 'border-indigo-600 text-indigo-650 bg-white'
+                        ? 'border-indigo-600 text-indigo-750 bg-white'
                         : 'border-transparent text-gray-500 hover:text-gray-800'
                     }`}
                   >
-                    📱 Mobile Money (Orange, MTN, Wave)
+                    <Smartphone className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                    <span>Push MoMo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('qr')}
+                    className={`py-3 font-bold text-center border-b-2 cursor-pointer transition flex items-center justify-center gap-1 ${
+                      paymentMethod === 'qr'
+                        ? 'border-indigo-600 text-indigo-750 bg-white'
+                        : 'border-transparent text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    <QrCode className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                    <span>Code QR</span>
                   </button>
                 </div>
               )}
@@ -269,7 +297,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                   </motion.div>
                 ) : (
                   <form onSubmit={handleSimulatedPayment} className="space-y-4">
-                    {paymentMethod === 'card' ? (
+                    {paymentMethod === 'card' && (
                       <div className="space-y-4 animate-fade-in">
                         <div className="space-y-1.5">
                           <label className="text-xs font-bold text-gray-600 block">Titulaire de la carte</label>
@@ -335,8 +363,9 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                           </div>
                         </div>
                       </div>
-                    ) : (
-                      /* Mobile Money Selection Option */
+                    )}
+
+                    {paymentMethod === 'momo' && (
                       <div className="space-y-4 animate-fade-in">
                         <div className="space-y-1.5">
                           <label className="text-xs font-bold text-gray-600 block">Sélectionnez votre opérateur</label>
@@ -407,6 +436,93 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                       </div>
                     )}
 
+                    {paymentMethod === 'qr' && (
+                      <div className="space-y-4 animate-fade-in">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-gray-600 block">Sélectionnez l'opérateur Mobile Money</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setQrProvider('mtn')}
+                              className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1 cursor-pointer ${
+                                qrProvider === 'mtn'
+                                  ? 'bg-amber-50 border-amber-500 text-amber-850'
+                                  : 'bg-white border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center font-black text-[10px] text-gray-900 border border-yellow-500">M</div>
+                              <span className="text-[10px] font-black uppercase">MTN MoMo</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setQrProvider('orange')}
+                              className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1 cursor-pointer ${
+                                qrProvider === 'orange'
+                                  ? 'bg-orange-50 border-orange-500 text-orange-850'
+                                  : 'bg-white border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center font-black text-[10px] text-white border border-orange-600">O</div>
+                              <span className="text-[10px] font-black uppercase">Orange</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setQrProvider('wave')}
+                              className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1 cursor-pointer ${
+                                qrProvider === 'wave'
+                                  ? 'bg-sky-50 border-sky-500 text-sky-850'
+                                  : 'bg-white border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="w-5 h-5 rounded-full bg-sky-400 flex items-center justify-center font-black text-[10px] text-white border border-sky-500">W</div>
+                              <span className="text-[10px] font-black uppercase">Wave</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Interactive dynamic QR Code panel with animated line */}
+                        <div className="flex flex-col items-center justify-center p-5 bg-slate-50 border border-slate-200/60 rounded-3xl relative shadow-xs overflow-hidden">
+                          <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                            <span className="text-[9px] font-black text-emerald-600 font-mono tracking-wider">SECURE LINK</span>
+                          </div>
+
+                          <div className="relative p-3 bg-white rounded-2xl border border-slate-200/80 shadow-md">
+                            {/* Scanning laser beam simulation */}
+                            <div className="absolute left-3 right-3 h-0.5 bg-emerald-500/80 opacity-75 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-bounce" style={{ top: 'calc(50% - 1px)' }} />
+
+                            <img
+                              referrerPolicy="no-referrer"
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+                                `${qrProvider === 'mtn' ? 'mtn_momo' : qrProvider === 'orange' ? 'orange_money' : 'wave'}://payment?invoiceId=${payingInvoice.id}&amount=${payingInvoice.amount}&school=CES_Ekali_1&recipient=CES_Ekali_1_APEE_Treasury`
+                              )}&color=0f172a&bgcolor=ffffff&qzone=1`}
+                              alt={`QR code ${qrProvider}`}
+                              className="w-[140px] h-[140px] object-contain relative z-10"
+                            />
+                          </div>
+
+                          <div className="text-center mt-3 max-w-[280px]">
+                            <p className="text-xs font-extrabold text-slate-800 leading-tight">
+                              Scannez pour payer <span className="font-mono text-indigo-600 text-sm block mt-1">{payingInvoice.amount.toFixed(2)} €</span>
+                            </p>
+                            <p className="text-[10px] text-slate-500 mt-1.5 leading-normal">
+                              Ouvrez votre application <span className="font-bold text-slate-700">{qrProvider === 'mtn' ? 'MTN MoMo' : qrProvider === 'orange' ? 'Orange Money' : 'Wave'}</span>, choisissez "Scanner Code QR", cadrez ce code puis saisissez votre code PIN pour finaliser l'opération.
+                            </p>
+                          </div>
+                        </div>
+
+                        {processing && momoStep && (
+                          <div className="p-3 bg-indigo-50 border border-indigo-150 rounded-xl space-y-1.5 animate-pulse">
+                            <span className="text-[9.5px] uppercase font-black tracking-widest text-indigo-700 block text-center">🔳 Détection du Scanner en Cours</span>
+                            <div className="text-xs text-indigo-900 font-semibold flex items-center justify-center gap-1.5 text-center">
+                              <span className="h-2 w-2 rounded-full bg-indigo-650 animate-ping shrink-0" />
+                              {momoStep}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="pt-2">
                       <button
                         type="submit"
@@ -421,7 +537,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                         ) : (
                           <>
                             <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                            Confirmer le Règlement de {payingInvoice.amount.toFixed(2)} €
+                            {paymentMethod === 'qr' ? "Simuler le scan & règlement" : `Confirmer le Règlement de ${payingInvoice.amount.toFixed(2)} €`}
                           </>
                         )}
                       </button>
