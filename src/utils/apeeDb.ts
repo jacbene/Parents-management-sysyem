@@ -244,7 +244,7 @@ export async function saveApeeSettings(parentId: string, settings: ApeeSettings)
   if (!parentId) return;
 
   try {
-    await setDoc(doc(db, 'invoices', 'apee_settings'), {
+    await setDoc(doc(db, 'invoices', `${parentId}_settings`), {
       id: 'apee_settings',
       studentId: 'apee_settings',
       parentId,
@@ -271,7 +271,7 @@ export async function saveApeeSettings(parentId: string, settings: ApeeSettings)
       classTeachersList: JSON.stringify(settings.classTeachers || []),
     });
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, 'invoices/apee_settings');
+    handleFirestoreError(err, OperationType.WRITE, `invoices/${parentId}_settings`);
   }
 }
 
@@ -401,7 +401,7 @@ export async function importFullBackup(
     const batch = writeBatch(db);
 
     // Write settings
-    const settingsDocRef = doc(db, 'invoices', 'apee_settings');
+    const settingsDocRef = doc(db, 'invoices', `${parentId}_settings`);
     batch.set(settingsDocRef, {
       id: 'apee_settings',
       studentId: 'apee_settings',

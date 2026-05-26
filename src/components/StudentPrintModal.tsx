@@ -33,6 +33,10 @@ interface StudentPrintModalProps {
 
 export default function StudentPrintModal({ student, grades, attendance, isOpen, onClose, settings }: StudentPrintModalProps) {
   const [showChart, setShowChart] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Find titular teacher for student's classroom in global ApeeSettings
   const foundTeacher = settings?.classTeachers?.find(t => {
@@ -891,24 +895,28 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
                     <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">PASMA-ENT ANALYTICS</span>
                   </div>
                   <div className="h-48 w-full text-[10px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={subjectChartData} margin={{ top: 15, right: 10, left: -25, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                        <XAxis dataKey="subject" tick={{ fontSize: 9, fill: '#475569', fontWeight: 600 }} tickLine={false} />
-                        <YAxis domain={[0, 20]} ticks={[0, 5, 10, 15, 20]} tick={{ fontSize: 9, fill: '#475569' }} tickLine={false} />
-                        <Tooltip 
-                          formatter={(value) => [`${value} / 20`, 'Moyenne scolaire']}
-                          contentStyle={{ fontSize: 10, borderRadius: 8, borderColor: '#cbd5e1' }}
-                        />
-                        <Bar dataKey="Moyenne" fill="#4f46e5" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                          {subjectChartData.map((entry, index) => {
-                            const isBelowMoyenne = entry.Moyenne < 10;
-                            return <Cell key={`cell-${index}`} fill={isBelowMoyenne ? '#ef4444' : '#4f46e5'} />;
-                          })}
-                        </Bar>
-                        <ReferenceLine y={10} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'Seuil de Réussite (10/20)', fill: '#ef4444', fontSize: 8, position: 'top', fontWeight: 'bold' }} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={192} minWidth={0}>
+                        <BarChart data={subjectChartData} margin={{ top: 15, right: 10, left: -25, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                          <XAxis dataKey="subject" tick={{ fontSize: 9, fill: '#475569', fontWeight: 600 }} tickLine={false} />
+                          <YAxis domain={[0, 20]} ticks={[0, 5, 10, 15, 20]} tick={{ fontSize: 9, fill: '#475569' }} tickLine={false} />
+                          <Tooltip 
+                            formatter={(value) => [`${value} / 20`, 'Moyenne scolaire']}
+                            contentStyle={{ fontSize: 10, borderRadius: 8, borderColor: '#cbd5e1' }}
+                          />
+                          <Bar dataKey="Moyenne" fill="#4f46e5" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                            {subjectChartData.map((entry, index) => {
+                              const isBelowMoyenne = entry.Moyenne < 10;
+                              return <Cell key={`cell-${index}`} fill={isBelowMoyenne ? '#ef4444' : '#4f46e5'} />;
+                            })}
+                          </Bar>
+                          <ReferenceLine y={10} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'Seuil de Réussite (10/20)', fill: '#ef4444', fontSize: 8, position: 'top', fontWeight: 'bold' }} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full bg-slate-50 rounded-xl animate-pulse flex items-center justify-center text-xs text-slate-405 font-medium font-sans">Chargement...</div>
+                    )}
                   </div>
                 </div>
               )}

@@ -30,6 +30,11 @@ export default function GradesDashboard({
   onPrintReport,
 }: GradesDashboardProps) {
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
+  const [isMounted, setIsMounted] = useState(false);
+  
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
   
   // Add Grade states
   const [showAddForm, setShowAddForm] = useState(false);
@@ -509,80 +514,84 @@ export default function GradesDashboard({
               </div>
 
               <div className="h-68 w-full pt-1">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 15, right: 15, left: -22, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis 
-                      dataKey="date" 
-                      tickLine={false}
-                      axisLine={false}
-                      tickStyle={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} 
-                      dy={8}
-                    />
-                    <YAxis 
-                      domain={[0, 20]} 
-                      tickCount={11}
-                      tickLine={false}
-                      axisLine={false}
-                      tickStyle={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} 
-                      dx={-4}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '14px',
-                        boxShadow: '0 8px 16px -2px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05)',
-                        fontSize: '11px',
-                        padding: '10px 14px'
-                      }}
-                      formatter={(value: any, name: string, props: any) => {
-                        const payload = props.payload;
-                        const scoreColor = value >= 10 ? 'text-emerald-700 font-extrabold' : 'text-rose-600 font-extrabold';
-                        return [
-                          <div className="space-y-1" key="content">
-                            <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                              <span>Matière :</span>
-                              <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-indigo-700 font-bold">{payload.subject}</span>
-                            </div>
-                            <div className="text-slate-600 font-medium">Éval : <span className="font-semibold text-slate-900">{payload.examName}</span></div>
-                            <div className="pt-1 text-xs border-t border-slate-100 flex items-center justify-between gap-3">
-                              <span className="text-gray-500 font-sans">Valuation :</span>
-                              <span className={scoreColor}>{value} / 20</span>
-                            </div>
-                          </div>,
-                          null
-                        ];
-                      }}
-                      labelFormatter={(label) => `📅 Date de l'Évaluation : ${label}`}
-                    />
-                    
-                    {/* passing average reference line */}
-                    <ReferenceLine 
-                      y={10} 
-                      stroke="#f43f5e" 
-                      strokeDasharray="4 4" 
-                      strokeWidth={1.25}
-                      label={{ 
-                        value: 'Moyenne requise (10/20)', 
-                        fill: '#f43f5e', 
-                        fontSize: 8.5, 
-                        position: 'insideBottomRight', 
-                        offset: 7, 
-                        fontWeight: 'bold' 
-                      }} 
-                    />
+                {isMounted ? (
+                  <ResponsiveContainer width="100%" height={272} minWidth={0}>
+                    <LineChart data={chartData} margin={{ top: 15, right: 15, left: -22, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis 
+                        dataKey="date" 
+                        tickLine={false}
+                        axisLine={false}
+                        tickStyle={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} 
+                        dy={8}
+                      />
+                      <YAxis 
+                        domain={[0, 20]} 
+                        tickCount={11}
+                        tickLine={false}
+                        axisLine={false}
+                        tickStyle={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} 
+                        dx={-4}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '14px',
+                          boxShadow: '0 8px 16px -2px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05)',
+                          fontSize: '11px',
+                          padding: '10px 14px'
+                        }}
+                        formatter={(value: any, name: string, props: any) => {
+                          const payload = props.payload;
+                          const scoreColor = value >= 10 ? 'text-emerald-700 font-extrabold' : 'text-rose-600 font-extrabold';
+                          return [
+                            <div className="space-y-1" key="content">
+                              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                                <span>Matière :</span>
+                                <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-indigo-700 font-bold">{payload.subject}</span>
+                              </div>
+                              <div className="text-slate-600 font-medium">Éval : <span className="font-semibold text-slate-900">{payload.examName}</span></div>
+                              <div className="pt-1 text-xs border-t border-slate-100 flex items-center justify-between gap-3">
+                                <span className="text-gray-500 font-sans">Valuation :</span>
+                                <span className={scoreColor}>{value} / 20</span>
+                              </div>
+                            </div>,
+                            null
+                          ];
+                        }}
+                        labelFormatter={(label) => `📅 Date de l'Évaluation : ${label}`}
+                      />
+                      
+                      {/* passing average reference line */}
+                      <ReferenceLine 
+                        y={10} 
+                        stroke="#f43f5e" 
+                        strokeDasharray="4 4" 
+                        strokeWidth={1.25}
+                        label={{ 
+                          value: 'Moyenne requise (10/20)', 
+                          fill: '#f43f5e', 
+                          fontSize: 8.5, 
+                          position: 'insideBottomRight', 
+                          offset: 7, 
+                          fontWeight: 'bold' 
+                        }} 
+                      />
 
-                    <Line
-                      type="monotone"
-                      dataKey="score"
-                      stroke="#4f46e5"
-                      strokeWidth={3}
-                      dot={{ r: 4, fill: '#4f46e5', stroke: '#ffffff', strokeWidth: 1.5 }}
-                      activeDot={{ r: 6, stroke: '#4f46e5', strokeWidth: 2, fill: '#ffffff' }}
-                      animationDuration={805}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                      <Line
+                        type="monotone"
+                        dataKey="score"
+                        stroke="#4f46e5"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: '#4f46e5', stroke: '#ffffff', strokeWidth: 1.5 }}
+                        activeDot={{ r: 6, stroke: '#4f46e5', strokeWidth: 2, fill: '#ffffff' }}
+                        animationDuration={805}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full bg-slate-50 rounded-2xl animate-pulse flex items-center justify-center text-xs text-slate-400 font-medium font-sans">Chargement de la courbe de progression...</div>
+                )}
               </div>
             </motion.div>
           )}

@@ -246,6 +246,24 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
       let matchedInvoice: any = null;
       let invoicesFoundCount = 0;
 
+      // Helper to strip diacritics/accents and convert to lowercase
+      const normalizeTextForLogin = (str: string) => {
+        return str
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '') // remove accents
+          .toLowerCase()
+          .trim();
+      };
+
+      // Helper to extract the last 9 digits of a phone number to reconcile country-code vs regional format differences
+      const sanitizePhoneForLogin = (phoneStr: string) => {
+        const digits = phoneStr.replace(/\D/g, ''); // keep only numerical digits
+        return digits.length >= 9 ? digits.slice(-9) : digits;
+      };
+
+      const searchNameNorm = normalizeTextForLogin(parentName);
+      const searchPhoneSan = sanitizePhoneForLogin(parentPhone);
+
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         // Match conditions: 
@@ -253,15 +271,13 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
         // 2. studentId equals 'apee_ces_ekali_1' (meaning Apee parent item)
         if (data.parentId === selectedSchoolId && data.studentId === 'apee_ces_ekali_1') {
           invoicesFoundCount++;
-          const candidateTitle = (data.title || '').toLowerCase().trim();
-          const candidatePhone = (data.phone || '').trim();
           
-          const searchName = parentName.toLowerCase().trim();
-          const searchPhone = parentPhone.trim();
+          const candidateTitleNorm = normalizeTextForLogin(data.title || '');
+          const candidatePhoneSan = sanitizePhoneForLogin(data.phone || '');
 
-          // Match by name containing searchName or phone matches exact
-          const nameMatches = candidateTitle.includes(searchName) || searchName.includes(candidateTitle);
-          const phoneMatches = candidatePhone === searchPhone || candidatePhone.replace(/\s+/g, '') === searchPhone.replace(/\s+/g, '');
+          // Match by name containing searchName or phone matches exact last 9 digits
+          const nameMatches = searchNameNorm.length >= 3 && (candidateTitleNorm.includes(searchNameNorm) || searchNameNorm.includes(candidateTitleNorm));
+          const phoneMatches = searchPhoneSan.length >= 8 && candidatePhoneSan === searchPhoneSan;
 
           if (nameMatches || phoneMatches) {
             matchedInvoice = data;
@@ -271,10 +287,7 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
 
       // If we are looking at the pre-seeded "Ekali" school, and the database doesn't have it, let's create a beautiful client-side fallback/automatic verify!
       if (!matchedInvoice && selectedSchoolId === 'demo_school_ekali') {
-        const searchName = parentName.toLowerCase().trim();
-        const searchPhone = parentPhone.trim();
-
-        if (searchName.includes('martin') || searchPhone.includes('677112233')) {
+        if (searchNameNorm.includes('martin') || searchPhoneSan.includes('677112233') || searchPhoneSan.endsWith('112233')) {
           matchedInvoice = {
             id: 'inv_martin',
             title: 'Jean Martin',
@@ -283,7 +296,7 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
             amountPaid: 15000, // Versé 15,000 FCFA (acompte > 0)
             studentsList: JSON.stringify([{ name: 'Lucas Martin', classRoom: 'CM2-A' }, { name: 'Chloé Martin', classRoom: 'CE2-B' }])
           };
-        } else if (searchName.includes('diallo') || searchPhone.includes('699445566')) {
+        } else if (searchNameNorm.includes('diallo') || searchPhoneSan.includes('699445566') || searchPhoneSan.endsWith('445566')) {
           matchedInvoice = {
             id: 'inv_diallo',
             title: 'Mariam Diallo',

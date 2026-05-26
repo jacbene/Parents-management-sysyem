@@ -11,6 +11,11 @@ interface ApeeDashboardProps {
 }
 
 export default function ApeeDashboard({ parents, expenses, settings, onNavigate }: ApeeDashboardProps) {
+  const [isMounted, setIsMounted] = React.useState(false);
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Calculations
   const parentsCount = parents.length;
   const pupilsCount = parents.reduce((sum, p) => sum + p.students.length, 0);
@@ -394,26 +399,30 @@ export default function ApeeDashboard({ parents, expenses, settings, onNavigate 
         </div>
         
         <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={displayProgressionData} margin={{ top: 15, right: 10, left: -15, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorCumulativeProgress" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
-              <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
-              <Tooltip 
-                formatter={(value, name) => [`${Number(value).toLocaleString()} FCFA`, name]} 
-                contentStyle={{ fontSize: 11, borderRadius: 12, backgroundColor: '#0f172a', color: '#fff', border: 'none' }} 
-              />
-              <Bar dataKey="Collecte Mensuelle" fill="#6366f1" opacity={0.6} radius={[4, 4, 0, 0]} barSize={34} />
-              <Area type="monotone" dataKey="Cumul Recouvré" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorCumulativeProgress)" />
-              <ReferenceLine y={settings.financialGoal} stroke="#f43f5e" strokeDasharray="5 5" label={{ value: 'Objectif de Caisse', fill: '#f43f5e', fontSize: 9, position: 'top', fontWeight: 'bold' }} />
-            </ComposedChart>
-          </ResponsiveContainer>
+          {isMounted ? (
+            <ResponsiveContainer width="100%" height={288} minWidth={0}>
+              <ComposedChart data={displayProgressionData} margin={{ top: 15, right: 10, left: -15, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorCumulativeProgress" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
+                <Tooltip 
+                  formatter={(value, name) => [`${Number(value).toLocaleString()} FCFA`, name]} 
+                  contentStyle={{ fontSize: 11, borderRadius: 12, backgroundColor: '#0f172a', color: '#fff', border: 'none' }} 
+                />
+                <Bar dataKey="Collecte Mensuelle" fill="#6366f1" opacity={0.6} radius={[4, 4, 0, 0]} barSize={34} />
+                <Area type="monotone" dataKey="Cumul Recouvré" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorCumulativeProgress)" />
+                <ReferenceLine y={settings.financialGoal} stroke="#f43f5e" strokeDasharray="5 5" label={{ value: 'Objectif de Caisse', fill: '#f43f5e', fontSize: 9, position: 'top', fontWeight: 'bold' }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full w-full bg-slate-50 rounded-2xl animate-pulse flex items-center justify-center text-xs text-slate-400 font-medium">Chargement du graphique...</div>
+          )}
         </div>
       </div>
 
@@ -428,21 +437,25 @@ export default function ApeeDashboard({ parents, expenses, settings, onNavigate 
             <p className="text-[10px] text-gray-400">Total cumulé inscrit par mois fiscal.</p>
           </div>
           <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={displayChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
-                <Tooltip formatter={(value) => [`${value.toLocaleString()} FCFA`, 'Collectes']} contentStyle={{ fontSize: 11, borderRadius: 12 }} />
-                <Area type="monotone" dataKey="Montant" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {isMounted ? (
+              <ResponsiveContainer width="100%" height={224} minWidth={0}>
+                <AreaChart data={displayChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
+                  <Tooltip formatter={(value) => [`${value.toLocaleString()} FCFA`, 'Collectes']} contentStyle={{ fontSize: 11, borderRadius: 12 }} />
+                  <Area type="monotone" dataKey="Montant" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full w-full bg-slate-50 rounded-2xl animate-pulse flex items-center justify-center text-xs text-slate-400 font-medium font-sans">Chargement...</div>
+            )}
           </div>
         </div>
 
@@ -455,17 +468,21 @@ export default function ApeeDashboard({ parents, expenses, settings, onNavigate 
             <p className="text-[10px] text-gray-400">Comparatif entre montants reçus et exigibles.</p>
           </div>
           <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={displayClassData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
-                <Tooltip formatter={(value) => [`${value.toLocaleString()} FCFA`, '']} contentStyle={{ fontSize: 11, borderRadius: 12 }} />
-                <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey="Payé (FCFA)" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Exigible (FCFA)" fill="#cbd5e1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {isMounted ? (
+              <ResponsiveContainer width="100%" height={224} minWidth={0}>
+                <BarChart data={displayClassData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
+                  <Tooltip formatter={(value) => [`${value.toLocaleString()} FCFA`, '']} contentStyle={{ fontSize: 11, borderRadius: 12 }} />
+                  <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: 10 }} />
+                  <Bar dataKey="Payé (FCFA)" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Exigible (FCFA)" fill="#cbd5e1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full w-full bg-slate-50 rounded-2xl animate-pulse flex items-center justify-center text-xs text-slate-400 font-medium font-sans">Chargement...</div>
+            )}
           </div>
         </div>
 
@@ -478,33 +495,37 @@ export default function ApeeDashboard({ parents, expenses, settings, onNavigate 
             <p className="text-[10px] text-gray-400">Distribution par ligne de budget allouée.</p>
           </div>
           <div className="h-56 relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={displayPieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={52}
-                  outerRadius={72}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {displayPieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(value, name, props) => {
-                    const entry = props.payload as any;
-                    return [
-                      `${Number(value).toLocaleString()} FCFA (${entry?.percentage || 0}%)`, 
-                      'Allocation Prévue'
-                    ];
-                  }}
-                  contentStyle={{ fontSize: 10, borderRadius: 12 }} 
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {isMounted ? (
+              <ResponsiveContainer width="100%" height={224} minWidth={0}>
+                <PieChart>
+                  <Pie
+                    data={displayPieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={52}
+                    outerRadius={72}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {displayPieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value, name, props) => {
+                      const entry = props.payload as any;
+                      return [
+                        `${Number(value).toLocaleString()} FCFA (${entry?.percentage || 0}%)`, 
+                        'Allocation Prévue'
+                      ];
+                    }}
+                    contentStyle={{ fontSize: 10, borderRadius: 12 }} 
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full w-full bg-slate-50 rounded-2xl animate-pulse flex items-center justify-center text-xs text-slate-400 font-medium font-sans">Chargement...</div>
+            )}
             {/* Centered Total Indicator */}
             <div className="absolute inset-x-0 top-18 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-[8px] font-sans font-black text-slate-400 uppercase tracking-widest leading-none">Alloué</span>

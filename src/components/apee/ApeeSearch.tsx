@@ -154,6 +154,9 @@ export default function ApeeSearch({ parents, onEditParentRequest, onDeleteParen
                 >
                   <div className="space-y-1 overflow-hidden">
                     <div className="flex items-center gap-1.5">
+                      {parent.status === 'retard' && (
+                        <AlertTriangle className="h-3.5 w-3.5 text-red-500 animate-pulse shrink-0" title="En retard de paiement" />
+                      )}
                       <span className="text-xs font-bold leading-tight truncate">{parent.name}</span>
                       <span className={`text-[9px] font-extrabold font-mono px-1.5 py-0.5 rounded uppercase shrink-0 ${
                         parent.status === 'soldé' 
