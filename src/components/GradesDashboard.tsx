@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Grade, Student } from '../types';
 import { Award, BookOpen, TrendingUp, Sparkles, Filter, Plus, Trash2, Lock, Unlock, CheckCircle, Printer } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 
 interface GradesDashboardProps {
   grades: Grade[];
@@ -482,35 +482,104 @@ export default function GradesDashboard({
             <motion.div
               initial={{ opacity: 0, scale: 0.99 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="p-5 bg-white border border-gray-100 rounded-2xl space-y-4 shadow-sm"
+              className="p-5 bg-white border border-gray-150 rounded-2xl space-y-4 shadow-sm"
             >
-              <h3 className="text-sm font-semibold text-gray-800">Évolution Temporelle des Notes (sur 20)</h3>
-              <div className="h-64 w-full">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
+                    <TrendingUp className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 tracking-tight">Courbe de Progression • Performance Trend</h3>
+                    <p className="text-[10px] text-gray-500">Moyennes extrapolées sur base commune de 20 points pour suivre l'évolution académique globale.</p>
+                  </div>
+                </div>
+                
+                {/* Visual Legend Key */}
+                <div className="flex items-center gap-4 text-[9px] font-sans font-semibold text-slate-500 pl-0.5 sm:pl-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-6 rounded bg-indigo-600"></span>
+                    <span>Note convertie (/20)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-6 rounded border-t border-dashed border-rose-400"></span>
+                    <span className="text-rose-600">Moyenne de passage (10/20)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-68 w-full pt-1">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <LineChart data={chartData} margin={{ top: 15, right: 15, left: -22, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="date" tickStyle={{ fontSize: 11 }} stroke="#94a3b8" />
-                    <YAxis domain={[0, 20]} tickStyle={{ fontSize: 11 }} stroke="#94a3b8" />
+                    <XAxis 
+                      dataKey="date" 
+                      tickLine={false}
+                      axisLine={false}
+                      tickStyle={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} 
+                      dy={8}
+                    />
+                    <YAxis 
+                      domain={[0, 20]} 
+                      tickCount={11}
+                      tickLine={false}
+                      axisLine={false}
+                      tickStyle={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} 
+                      dx={-4}
+                    />
                     <Tooltip
                       contentStyle={{
-                        border: '1px solid #f1f5f9',
-                        borderRadius: '12px',
-                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)',
-                        fontSize: '12px'
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '14px',
+                        boxShadow: '0 8px 16px -2px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05)',
+                        fontSize: '11px',
+                        padding: '10px 14px'
                       }}
-                      formatter={(value: any, name: string, props: any) => [
-                        `${value} / 20`,
-                        `Note (${props.payload.subject})`
-                      ]}
-                      labelFormatter={(label) => `Évaluation du : ${label}`}
+                      formatter={(value: any, name: string, props: any) => {
+                        const payload = props.payload;
+                        const scoreColor = value >= 10 ? 'text-emerald-700 font-extrabold' : 'text-rose-600 font-extrabold';
+                        return [
+                          <div className="space-y-1" key="content">
+                            <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                              <span>Matière :</span>
+                              <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-indigo-700 font-bold">{payload.subject}</span>
+                            </div>
+                            <div className="text-slate-600 font-medium">Éval : <span className="font-semibold text-slate-900">{payload.examName}</span></div>
+                            <div className="pt-1 text-xs border-t border-slate-100 flex items-center justify-between gap-3">
+                              <span className="text-gray-500 font-sans">Valuation :</span>
+                              <span className={scoreColor}>{value} / 20</span>
+                            </div>
+                          </div>,
+                          null
+                        ];
+                      }}
+                      labelFormatter={(label) => `📅 Date de l'Évaluation : ${label}`}
                     />
+                    
+                    {/* passing average reference line */}
+                    <ReferenceLine 
+                      y={10} 
+                      stroke="#f43f5e" 
+                      strokeDasharray="4 4" 
+                      strokeWidth={1.25}
+                      label={{ 
+                        value: 'Moyenne requise (10/20)', 
+                        fill: '#f43f5e', 
+                        fontSize: 8.5, 
+                        position: 'insideBottomRight', 
+                        offset: 7, 
+                        fontWeight: 'bold' 
+                      }} 
+                    />
+
                     <Line
                       type="monotone"
                       dataKey="score"
                       stroke="#4f46e5"
                       strokeWidth={3}
-                      dot={{ r: 5, fill: '#4f46e5', strokeWidth: 0 }}
-                      activeDot={{ r: 7 }}
+                      dot={{ r: 4, fill: '#4f46e5', stroke: '#ffffff', strokeWidth: 1.5 }}
+                      activeDot={{ r: 6, stroke: '#4f46e5', strokeWidth: 2, fill: '#ffffff' }}
+                      animationDuration={805}
                     />
                   </LineChart>
                 </ResponsiveContainer>

@@ -46,17 +46,36 @@ export default function StudentCard({ student, isSelected, onSelect, onUpdateStu
       >
         <div className="flex gap-4 items-start">
           <div className="relative shrink-0">
-            {/* Avatar display frame */}
-            <div className={`w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center relative border ${
-              isSelected ? 'border-indigo-400 bg-white/15' : 'border-gray-150 bg-slate-50'
-            }`}>
+            {/* Avatar display frame with interactive hover overlay */}
+            <div 
+              onClick={(e) => {
+                e.stopPropagation(); // prevent selecting the card
+                setShowCamera(true);
+              }}
+              className={`group w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center relative border cursor-pointer transition-all duration-300 ${
+                isSelected 
+                  ? 'border-indigo-400 bg-white/10 hover:bg-white/20' 
+                  : 'border-gray-150 bg-slate-50 hover:border-indigo-300 hover:bg-indigo-50/25'
+              }`}
+              title="Cliquer pour changer la photo"
+            >
               {isImageAvatar(student.avatar) ? (
-                <img src={student.avatar} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <img 
+                  src={student.avatar} 
+                  alt={student.name} 
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" 
+                  referrerPolicy="no-referrer" 
+                />
               ) : (
-                <span className="text-3xl font-sans" role="img" aria-label="student avatar">
+                <span className="text-3xl font-sans transition-transform duration-300 group-hover:scale-110" role="img" aria-label="student avatar">
                   {student.avatar}
                 </span>
               )}
+              {/* Sleek cover overlay for photo customization */}
+              <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center text-white">
+                <Camera className="h-4.5 w-4.5" />
+                <span className="text-[7.5px] font-sans font-black uppercase tracking-wider mt-0.5">Éditer</span>
+              </div>
             </div>
 
             {/* Quick Camera Badge Trigger */}

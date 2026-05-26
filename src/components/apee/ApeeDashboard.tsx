@@ -1,6 +1,6 @@
 import React from 'react';
 import { Landmark, TrendingUp, Users, GraduationCap, Percent, AlertCircle, Coins, ArrowRight, Sparkles } from 'lucide-react';
-import { ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, Cell, Line, ReferenceLine } from 'recharts';
+import { ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, Cell, Line, ReferenceLine, PieChart, Pie } from 'recharts';
 import { ApeeParent, ApeeExpense, ApeeSettings } from '../../types';
 
 interface ApeeDashboardProps {
@@ -39,6 +39,35 @@ export default function ApeeDashboard({ parents, expenses, settings, onNavigate 
     }
     return acc;
   }, {} as Record<string, number>);
+
+  // Budget allocation chart calculations
+  const totalAllocatedBudget = budgetLines.reduce((sum, line) => sum + line.allocatedAmount, 0);
+  const pieChartData = budgetLines.map(line => ({
+    name: line.name,
+    value: line.allocatedAmount,
+    percentage: totalAllocatedBudget > 0 ? ((line.allocatedAmount / totalAllocatedBudget) * 100).toFixed(1) : '0',
+    spent: spentByBudgetLine[line.id] || 0
+  })).filter(item => item.value > 0);
+
+  // Fallback if no budget lines are registered yet
+  const displayPieData = pieChartData.length > 0 ? pieChartData : [
+    { name: 'Fournitures scolaires', value: 1200000, percentage: '24.0', spent: 450000 },
+    { name: 'Entretien & Travaux', value: 1500000, percentage: '30.0', spent: 600005 },
+    { name: 'Primes enseignants', value: 1000000, percentage: '20.0', spent: 300000 },
+    { name: 'Activités culturelles', value: 800000, percentage: '16.0', spent: 150000 },
+    { name: 'Caisse de secours', value: 500000, percentage: '10.0', spent: 50000 },
+  ];
+
+  const PIE_COLORS = [
+    '#4f46e5', // Indigo 605
+    '#10b981', // Emerald 500
+    '#f59e0b', // Amber 500
+    '#3b82f6', // Blue 500
+    '#ec4899', // Pink 500
+    '#8b5cf6', // Violet 500
+    '#06b6d4', // Cyan 500
+    '#f43f5e', // Rose 500
+  ];
 
   // Recharts Month level data processing
   const monthlyDataMap: { [month: string]: number } = {};
@@ -388,10 +417,10 @@ export default function ApeeDashboard({ parents, expenses, settings, onNavigate 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Area chart of cumulative revenues */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-150 space-y-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-150 space-y-4 flex flex-col justify-between">
           <div>
             <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
               <TrendingUp className="h-4 w-4 text-emerald-500" /> Flux mensuel des versements
@@ -418,7 +447,7 @@ export default function ApeeDashboard({ parents, expenses, settings, onNavigate 
         </div>
 
         {/* Bar chart comparing class values */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-150 space-y-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-150 space-y-4 flex flex-col justify-between">
           <div>
             <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
               <GraduationCap className="h-4 w-4 text-indigo-500" /> Versements par Classe d'élèves
@@ -437,6 +466,63 @@ export default function ApeeDashboard({ parents, expenses, settings, onNavigate 
                 <Bar dataKey="Exigible (FCFA)" fill="#cbd5e1" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Pie chart of Budget Allocation */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-150 space-y-4 flex flex-col justify-between">
+          <div>
+            <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <Coins className="h-4 w-4 text-indigo-600" /> Répartition du Budget Prévu
+            </h4>
+            <p className="text-[10px] text-gray-400">Distribution par ligne de budget allouée.</p>
+          </div>
+          <div className="h-56 relative flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={displayPieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={52}
+                  outerRadius={72}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {displayPieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value, name, props) => {
+                    const entry = props.payload as any;
+                    return [
+                      `${Number(value).toLocaleString()} FCFA (${entry?.percentage || 0}%)`, 
+                      'Allocation Prévue'
+                    ];
+                  }}
+                  contentStyle={{ fontSize: 10, borderRadius: 12 }} 
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Centered Total Indicator */}
+            <div className="absolute inset-x-0 top-18 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[8px] font-sans font-black text-slate-400 uppercase tracking-widest leading-none">Alloué</span>
+              <span className="text-[10px] font-mono font-bold text-slate-800 tracking-tight mt-1">
+                {totalAllocatedBudget > 0 ? totalAllocatedBudget.toLocaleString() : '5 000 000'} F
+              </span>
+            </div>
+          </div>
+          
+          {/* Custom Mini Legende representing the slices */}
+          <div className="grid grid-cols-2 gap-1.5 text-[9px] max-h-24 overflow-y-auto pt-1 border-t border-slate-100">
+            {displayPieData.slice(0, 6).map((item, idx) => (
+              <div key={item.name} className="flex items-center gap-1.5 min-w-0" title={`${item.name} (${item.percentage}%)`}>
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}></span>
+                <span className="text-slate-650 truncate font-semibold">{item.name}</span>
+                <span className="text-slate-400 font-mono shrink-0 font-medium">{item.percentage}%</span>
+              </div>
+            ))}
           </div>
         </div>
 
