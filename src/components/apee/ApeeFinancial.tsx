@@ -168,7 +168,7 @@ export default function ApeeFinancial({ expenses, onSaveExpense, onDeleteExpense
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139); // Slate 500
-    doc.text(`Année Scolaire : ${settings.schoolYear || "N/A"} • Date de tirage : ${new Date().toLocaleDateString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}`, margin + 6, y + 17);
+    doc.text(`Année Scolaire : ${settings.schoolYear || "N/A"} • Date de tirage : ${new Date().toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}`, margin + 6, y + 17);
 
     y += 24;
 

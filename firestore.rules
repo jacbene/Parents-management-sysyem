@@ -27,8 +27,8 @@ service cloud.firestore {
     function isSchoolManagerOrDemo(schoolId) {
       return isSignedIn() && (
         schoolId.startsWith('demo_school') ||
-        (exists(/databases/$(database)/documents/establishments/$(schoolId)) &&
-         get(/databases/$(database)/documents/establishments/$(schoolId)).data.ownerId == request.auth.uid)
+        schoolId == request.auth.uid ||
+        exists(/databases/$(database)/documents/establishments/$(schoolId))
       );
     }
 

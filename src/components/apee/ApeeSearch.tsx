@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { Search, UserCheck, MessageSquare, Edit2, Trash2, Printer, X, Phone, MapPin, Tag, Calendar, AlertTriangle, ChevronRight, Notebook } from 'lucide-react';
+import { Search, UserCheck, MessageSquare, Edit2, Trash2, Printer, X, Phone, MapPin, Tag, Calendar, AlertTriangle, ChevronRight, Notebook, Download } from 'lucide-react';
 import { ApeeParent, ApeeStudentLink } from '../../types';
+import { jsPDF } from 'jspdf';
 
 interface ApeeSearchProps {
   parents: ApeeParent[];
   onEditParentRequest: (parent: ApeeParent) => void;
   onDeleteParent: (id: string) => void;
+  settings?: any;
 }
 
-export default function ApeeSearch({ parents, onEditParentRequest, onDeleteParent }: ApeeSearchProps) {
+export default function ApeeSearch({ parents, onEditParentRequest, onDeleteParent, settings }: ApeeSearchProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [classFilter, setClassFilter] = useState<string>('all');
@@ -46,7 +48,273 @@ export default function ApeeSearch({ parents, onEditParentRequest, onDeleteParen
   };
 
   const handleTriggerPrint = () => {
-    window.print();
+    if (!selectedParent) return;
+
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    let y = 15;
+    const margin = 15;
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const contentWidth = pageWidth - (2 * margin); // 180mm
+
+    const drawPageHeaderFooter = () => {
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(margin, 12, margin + contentWidth, 12);
+      
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text(`Aperçu Reçu APEE • Année : ${settings?.schoolYear || "2025/2026"}`, margin, 9);
+      
+      doc.line(margin, pageHeight - 12, margin + contentWidth, pageHeight - 12);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`PASMA-ENT SYSTEM - Trésorerie d'Établissement`, margin, pageHeight - 8);
+      doc.text(`Reçu certifié conforme`, margin + contentWidth - 35, pageHeight - 8);
+    };
+
+    drawPageHeaderFooter();
+
+    // Top Official Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text("RÉPUBLIQUE DU CAMEROUN", margin, y + 4);
+    doc.text("REPUBLIC OF CAMEROON", margin + contentWidth, y + 4, { align: 'right' });
+
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(6.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Paix - Travail - Patrie", margin, y + 8);
+    doc.text("Peace - Work - Fatherland", margin + contentWidth, y + 8, { align: 'right' });
+
+    y += 15;
+
+    // Amber left stripe
+    doc.setFillColor(245, 158, 11); // Amber-500
+    doc.rect(margin, y, 4, 18, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(217, 119, 6);
+    doc.text(`${(settings?.associationName || "APEE CES EKALI 1").toUpperCase()}`, margin + 6, y + 4);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text("REÇU OFFICIEL DE COTISATION APEE", margin + 6, y + 12);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Facturé le : ${new Date(selectedParent.createdAt || Date.now()).toLocaleDateString('fr-FR')} • Émis le : ${new Date().toLocaleDateString('fr-FR')}`, margin + 6, y + 17);
+
+    y += 24;
+
+    // Financial calculations box
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.rect(margin, y, contentWidth, 24, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text("TOTAL DU EXIGIBLE", margin + 6, y + 7);
+    doc.text("TOTAL PAYÉ À CE JOUR", margin + 65, y + 7);
+    doc.text("RESTE À RECOUVRER", margin + 125, y + 7);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${selectedParent.totalDue.toLocaleString()} FCFA`, margin + 6, y + 15);
+
+    doc.setTextColor(79, 70, 229); // Indigo
+    doc.text(`${selectedParent.totalPaid.toLocaleString()} FCFA`, margin + 65, y + 15);
+
+    const rest = Math.max(0, selectedParent.totalDue - selectedParent.totalPaid);
+    doc.setTextColor(rest > 0 ? 239 : 16, rest > 0 ? 68 : 185, rest > 0 ? 68 : 129); // Red if due, green if paid
+    doc.text(`${rest.toLocaleString()} FCFA`, margin + 125, y + 15);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Montant forfaitaire réglementaire", margin + 6, y + 20);
+    doc.text(`Statut dossier : ${selectedParent.status.toUpperCase()}`, margin + 65, y + 20);
+    doc.text(rest === 0 ? "Compte entièrement soldé (Merci)" : "Solde restant exigible", margin + 125, y + 20);
+
+    y += 32;
+
+    // Parent details
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text("COORDONNÉES DU PARENT PAYEUR", margin, y);
+    y += 4;
+    
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, y, margin + contentWidth, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text("Nom complet du Parent :", margin + 4, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(selectedParent.name, margin + 45, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text("Téléphone :", margin + 4, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(selectedParent.phone, margin + 45, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text("Quartier / Adresse habituelle :", margin + 4, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(selectedParent.address || 'Non spécifié', margin + 45, y);
+    y += 6;
+
+    if (selectedParent.email) {
+      doc.setFont('helvetica', 'bold');
+      doc.text("Adresse de messagerie :", margin + 4, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text(selectedParent.email, margin + 45, y);
+      y += 6;
+    }
+
+    if (selectedParent.note) {
+      doc.setFont('helvetica', 'bold');
+      doc.text("Note / Observations :", margin + 4, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text(selectedParent.note, margin + 45, y);
+      y += 6;
+    }
+
+    y += 6;
+
+    // Pupils table list
+    if (selectedParent.students && selectedParent.students.length > 0) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text("PUPILLES (ÉLÈVES À CHARGE ENREGISTRÉS)", margin, y);
+      y += 4;
+      
+      doc.line(margin, y, margin + contentWidth, y);
+      y += 5;
+
+      // Table Header Pupils
+      doc.setFillColor(241, 245, 249);
+      doc.rect(margin, y, contentWidth, 6.5, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text("N°", margin + 4, y + 4.5);
+      doc.text("Nom de l'élève", margin + 15, y + 4.5);
+      doc.text("Classe assignée", margin + 120, y + 4.5);
+
+      y += 6.5;
+
+      selectedParent.students.forEach((kid, idx) => {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+
+        doc.text(String(idx + 1), margin + 4, y + 4.5);
+        doc.setFont('helvetica', 'bold');
+        doc.text(kid.name.toUpperCase(), margin + 15, y + 4.5);
+        doc.setFont('helvetica', 'normal');
+        doc.text(kid.classRoom, margin + 120, y + 4.5);
+
+        y += 6.5;
+
+        doc.setDrawColor(241, 245, 249);
+        doc.line(margin, y, margin + contentWidth, y);
+      });
+
+      y += 6;
+    }
+
+    // Payment history section (Section III)
+    if (selectedParent.payments && selectedParent.payments.length > 0) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text("HISTORIQUE DÉTAILLÉ DES TRANSACTIONS ÉMARGÉES", margin, y);
+      y += 4;
+      
+      doc.setDrawColor(226, 232, 240);
+      doc.line(margin, y, margin + contentWidth, y);
+      y += 5;
+
+      // Table Header Payments
+      doc.setFillColor(241, 245, 249);
+      doc.rect(margin, y, contentWidth, 6.5, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Date de Paiement", margin + 4, y + 4.5);
+      doc.text("Mode de Versement", margin + 45, y + 4.5);
+      doc.text("Référence transaction", margin + 90, y + 4.5);
+      doc.text("Montant versé", margin + 175, y + 4.5, { align: 'right' });
+
+      y += 6.5;
+
+      selectedParent.payments.forEach((pay) => {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+
+        doc.text(new Date(pay.date).toLocaleDateString('fr-FR'), margin + 4, y + 4.5);
+        doc.text(pay.method || 'Espèces', margin + 45, y + 4.5);
+        doc.text(pay.transactionId || 'N/A', margin + 90, y + 4.5);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${pay.amount.toLocaleString()} FCFA`, margin + 175, y + 4.5, { align: 'right' });
+
+        y += 6.5;
+
+        doc.setDrawColor(241, 245, 249);
+        doc.line(margin, y, margin + contentWidth, y);
+      });
+
+      y += 6;
+    }
+
+    // Signatures block
+    if (y > pageHeight - 45) {
+      doc.addPage();
+      drawPageHeaderFooter();
+      y = 25;
+    }
+
+    y += 10;
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, y, margin + contentWidth, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(51, 65, 85);
+    doc.text("Émargement Parent d'Élève", margin + 10, y);
+    doc.text("Trésorier de l'Association APEE", margin + contentWidth - 70, y);
+
+    const safeFilename = `bulletin_apee_${selectedParent.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}.pdf`;
+    doc.save(safeFilename);
   };
 
   return (
@@ -335,9 +603,10 @@ export default function ApeeSearch({ parents, onEditParentRequest, onDeleteParen
 
               <button
                 onClick={handleTriggerPrint}
-                className="w-full mt-2 bg-slate-900 hover:bg-black text-white font-bold rounded-xl py-2.5 text-xs uppercase tracking-wide flex items-center justify-center gap-2 cursor-pointer transition"
+                className="w-full mt-2 bg-indigo-650 hover:bg-indigo-700 text-white font-bold rounded-xl py-2.5 text-xs uppercase tracking-wide flex items-center justify-center gap-2 cursor-pointer transition shadow-xs"
+                title="Générer et télécharger un reçu de cotisation APEE officiel au format PDF"
               >
-                <Printer className="h-4 w-4 text-amber-400" /> Imprimer Reçu Parent
+                <Download className="h-4 w-4 text-amber-300" /> Télécharger Reçu (PDF)
               </button>
 
             </div>

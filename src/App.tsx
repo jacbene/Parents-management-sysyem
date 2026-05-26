@@ -1338,6 +1338,7 @@ export default function App() {
                             setActiveTab('apee_recording');
                           }}
                           onDeleteParent={handleDeleteApeeParentInPlace}
+                          settings={apeeSettings}
                         />
                       </motion.div>
                     )}

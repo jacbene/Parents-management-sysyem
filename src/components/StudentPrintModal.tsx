@@ -116,6 +116,7 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
   });
 
   const handlePrint = () => {
+    alert("Aperçu Système : L'impression brute du navigateur est lancée. Si jamais l'impression directe ne réagit pas à cause d'une restriction d'aperçu d'onglet sécurisé (iframe), veuillez cliquer sur 'Télécharger le PDF' juste à côté : il produit un bulletin identique haute résolution entièrement prêt à imprimer !");
     window.print();
   };
 
@@ -260,7 +261,7 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139); // Slate 500
-    doc.text(`Édité le ${new Date().toLocaleDateString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}`, margin + 6, y + 17);
+    doc.text(`Édité le ${new Date().toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}`, margin + 6, y + 17);
 
     y += 24;
 
@@ -773,7 +774,7 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
                   </h2>
                   <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5" />
-                    Édité le {new Date().toLocaleDateString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}
+                    Édité le {new Date().toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}
                   </p>
                 </div>
                 
