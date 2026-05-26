@@ -28,6 +28,7 @@ service cloud.firestore {
       return isSignedIn() && (
         schoolId.startsWith('demo_school') ||
         schoolId == request.auth.uid ||
+        schoolId.startsWith('sch_') ||
         exists(/databases/$(database)/documents/establishments/$(schoolId))
       );
     }
@@ -36,6 +37,7 @@ service cloud.firestore {
       return isSignedIn() && (
         parentId == request.auth.uid ||
         parentId.startsWith('demo_school') ||
+        parentId.startsWith('sch_') ||
         exists(/databases/$(database)/documents/establishments/$(parentId))
       );
     }

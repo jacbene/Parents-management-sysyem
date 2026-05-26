@@ -219,6 +219,33 @@ export async function fetchApeeData(parentId: string) {
     const finalParents = dbParents.length > 0 ? dbParents : cachedParents;
     const finalExpenses = dbExpenses.length > 0 ? dbExpenses : cachedExpenses;
 
+    // Automatic self-healing: copy local-only parents back to Firestore
+    if (parentId && dbParents.length === 0 && cachedParents.length > 0) {
+      console.log("Rescuing local-only parents and syncing them to Firestore...");
+      cachedParents.forEach(async (cp) => {
+        try {
+          const invData = normalizeToInvoice(cp, parentId);
+          await setDoc(doc(db, 'invoices', cp.id), invData);
+        } catch (e) {
+          console.error("Auto background sync failed for parent", cp.name, e);
+        }
+      });
+    }
+
+    if (parentId && dbParents.length > 0 && cachedParents.length > dbParents.length) {
+      cachedParents.forEach(async (cp) => {
+        if (!dbParents.some(dp => dp.id === cp.id)) {
+          console.log("Rescuing newly-added offline parent:", cp.name);
+          try {
+            const invData = normalizeToInvoice(cp, parentId);
+            await setDoc(doc(db, 'invoices', cp.id), invData);
+          } catch (e) {
+            console.error("Auto rescue failed for parent", cp.name, e);
+          }
+        }
+      });
+    }
+
     // Persist again locally
     localStorage.setItem(`${CACHE_SETTINGS}_${parentId}`, JSON.stringify(finalSettings));
     localStorage.setItem(`${CACHE_PARENTS}_${parentId}`, JSON.stringify(finalParents));
