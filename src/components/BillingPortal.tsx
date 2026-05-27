@@ -9,9 +9,18 @@ interface BillingPortalProps {
   onUpdateInvoice: (updated: Invoice) => void;
   parentPhone?: string;
   students?: Student[];
+  portalUserRole?: 'manager' | 'parent' | null;
+  filteredStudents?: Student[];
 }
 
-export default function BillingPortal({ invoices, onUpdateInvoice, parentPhone, students }: BillingPortalProps) {
+export default function BillingPortal({ 
+  invoices, 
+  onUpdateInvoice, 
+  parentPhone, 
+  students,
+  portalUserRole,
+  filteredStudents
+}: BillingPortalProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'unpaid' | 'paid'>('all');
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
 
@@ -38,8 +47,25 @@ export default function BillingPortal({ invoices, onUpdateInvoice, parentPhone, 
 
   const formatted = payingInvoice ? formatAmountTtc(payingInvoice.amount) : { euro: '0.00 €', fcfa: '0 FCFA' };
 
-  // Filter invoices
-  const filteredInvoices = invoices.filter(inv => {
+  // Filter out non-student (administrative/settings/cotisation parent) documents
+  const studentInvoices = invoices.filter(inv => {
+    if (
+      inv.studentId === 'apee_ces_ekali_1' ||
+      inv.studentId === 'apee_expense' ||
+      inv.studentId === 'apee_settings' ||
+      inv.id.endsWith('_settings')
+    ) {
+      return false;
+    }
+    // If the active role is parent and filteredStudents list is available, restrict to matching active pupils
+    if (portalUserRole === 'parent' && filteredStudents) {
+      return filteredStudents.some(s => s.id === inv.studentId);
+    }
+    return true;
+  });
+
+  // Filter invoices for tabs
+  const filteredInvoices = studentInvoices.filter(inv => {
     if (activeTab === 'unpaid') return inv.status === 'Unpaid' || inv.status === 'Overdue';
     if (activeTab === 'paid') return inv.status === 'Paid';
     return true;
@@ -96,7 +122,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice, parentPhone, 
                 : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            Tous ({invoices.length})
+            Tous ({studentInvoices.length})
           </button>
           <button
             onClick={() => setActiveTab('unpaid')}
@@ -106,7 +132,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice, parentPhone, 
                 : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            À Payer ({invoices.filter(i => i.status !== 'Paid').length})
+            À Payer ({studentInvoices.filter(i => i.status !== 'Paid').length})
           </button>
           <button
             onClick={() => setActiveTab('paid')}
@@ -116,7 +142,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice, parentPhone, 
                 : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            Payés ({invoices.filter(i => i.status === 'Paid').length})
+            Payés ({studentInvoices.filter(i => i.status === 'Paid').length})
           </button>
         </div>
       </div>
@@ -156,8 +182,12 @@ export default function BillingPortal({ invoices, onUpdateInvoice, parentPhone, 
 
               <div className="flex items-center gap-5">
                 <div className="text-right">
-                  <div className="text-xl font-black text-gray-900 font-mono">{inv.amount.toFixed(2)} €</div>
-                  <span className="text-[10px] text-gray-400">Total Taxe Incluse</span>
+                  <div className="text-base font-black text-indigo-750 font-mono">
+                    {formatAmountTtc(inv.amount).fcfa}
+                  </div>
+                  <span className="text-[10px] text-gray-400 block">
+                    soit {formatAmountTtc(inv.amount).euro} (TTC)
+                  </span>
                 </div>
                 {inv.status !== 'Paid' && (
                   <button

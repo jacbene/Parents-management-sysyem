@@ -362,15 +362,12 @@ export default function App() {
     const initAndFetchData = async () => {
       setDataLoading(true);
       try {
-        // A. Verify if database has seeded profiles for this account space (demo schools pre-seeded dynamically)
-        const isDemoSchool = userId.startsWith('demo_school_');
-        if (!isDemoSchool) {
-          const seeded = await isDatabaseSeeded(userId);
-          if (!seeded) {
-            setSeeding(true);
-            await seedUserData(userId);
-            setSeeding(false);
-          }
+        // A. Verify if database has seeded profiles for this account space (demo schools pre-seeded dynamically if empty)
+        const seeded = await isDatabaseSeeded(userId);
+        if (!seeded) {
+          setSeeding(true);
+          await seedUserData(userId);
+          setSeeding(false);
         }
 
         // B. Fetch all related collections under parentId
@@ -695,7 +692,16 @@ export default function App() {
 
   // Compute stats counting for unread/active notifications in side drawer
   const pendingHomeworkCount = homeworks.filter(h => h.studentId === activeStudent?.id && h.status === 'Pending').length;
-  const unpaidInvoiceCount = invoices.filter(i => i.status !== 'Paid').length;
+  const unpaidInvoiceCount = invoices.filter(i => {
+    // Skip general / administrative entries
+    if (i.studentId === 'apee_settings' || i.studentId === 'apee_expense' || i.studentId === 'apee_ces_ekali_1') {
+      return false;
+    }
+    if (portalUserRole === 'parent') {
+      return i.status !== 'Paid' && filteredStudents.some(s => s.id === i.studentId);
+    }
+    return i.status !== 'Paid';
+  }).length;
 
   // Unauthenticated screen login handlings
   const handleLogin = async () => {
@@ -1468,7 +1474,37 @@ export default function App() {
 
                     {activeTab === 'billing' && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key="billing">
-                        <BillingPortal invoices={invoices} onUpdateInvoice={handleUpdateInvoiceInPlace} parentPhone={portalParentDetails?.phone} students={students} />
+                        <BillingPortal
+                          invoices={
+                            portalUserRole === 'parent'
+                              ? invoices.filter(inv => {
+                                  // 1. Is it a pupil invoice for one of their kids?
+                                  const isKidInvoice = filteredStudents.some(s => s.id === inv.studentId);
+                                  if (isKidInvoice) return true;
+
+                                  // 2. Is it their own APEE parent invoice?
+                                  if (inv.studentId === 'apee_ces_ekali_1') {
+                                    const parentPhoneSan = portalParentDetails?.phone?.replace(/\D/g, '').slice(-9) || '';
+                                    const invPhoneSan = inv.phone?.replace(/\D/g, '').slice(-9) || '';
+                                    const phoneMatches = parentPhoneSan && invPhoneSan && parentPhoneSan === invPhoneSan;
+
+                                    const parentNameNorm = portalParentDetails?.name?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() || '';
+                                    const invNameNorm = inv.title?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() || '';
+                                    const nameMatches = parentNameNorm && invNameNorm && (parentNameNorm.includes(invNameNorm) || invNameNorm.includes(parentNameNorm));
+
+                                    return phoneMatches || nameMatches;
+                                  }
+
+                                  return false;
+                                })
+                              : invoices
+                          }
+                          onUpdateInvoice={handleUpdateInvoiceInPlace}
+                          parentPhone={portalParentDetails?.phone}
+                          students={students}
+                          portalUserRole={portalUserRole}
+                          filteredStudents={filteredStudents}
+                        />
                       </motion.div>
                     )}
 
