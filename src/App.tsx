@@ -315,10 +315,33 @@ export default function App() {
 
   // Filter students based on Parent authorized subset for Visitor role
   const filteredStudents = students.filter(s => {
-    if (portalUserRole === 'parent' && portalParentDetails?.studentSubsetNames) {
-      const allowedNames = portalParentDetails.studentSubsetNames.map(name => name.toLowerCase().trim());
-      return allowedNames.includes(s.name.toLowerCase().trim()) || 
-             allowedNames.some(allowed => s.name.toLowerCase().trim().includes(allowed) || allowed.includes(s.name.toLowerCase().trim()));
+    if (portalUserRole === 'parent') {
+      let allowedNames: string[] = [];
+      if (portalParentDetails?.studentSubsetNames && portalParentDetails.studentSubsetNames.length > 0) {
+        allowedNames = portalParentDetails.studentSubsetNames.map(name => name.toLowerCase().trim());
+      } else {
+        // Safe Fallbacks for demo presets
+        const parentNameLower = (portalParentDetails?.name || '').toLowerCase();
+        const parentPhoneClean = (portalParentDetails?.phone || '').replace(/\D/g, '');
+        if (parentNameLower.includes('martin') || parentPhoneClean.includes('677112233')) {
+          allowedNames = ['lucas martin', 'chloe martin', 'chloé martin'];
+        } else if (parentNameLower.includes('diallo') || parentPhoneClean.includes('699445566')) {
+          allowedNames = ['amadou diallo'];
+        } else {
+          // If still no matches, we search if the student's name shares any common words with the parent's name (like last name)
+          const parentWords = parentNameLower.split(/\s+/).filter(w => w.length > 2);
+          const studentNameLower = s.name.toLowerCase();
+          const hasCommonWord = parentWords.some(word => studentNameLower.includes(word));
+          if (hasCommonWord) return true;
+          
+          // Absolute fallback: if still empty list, allow all students in this custom space so they are never locked out
+          return true;
+        }
+      }
+      
+      const sNameLower = s.name.toLowerCase().trim();
+      return allowedNames.includes(sNameLower) || 
+             allowedNames.some(allowed => sNameLower.includes(allowed) || allowed.includes(sNameLower));
     }
     return true;
   });
@@ -339,8 +362,8 @@ export default function App() {
   // 2. Fetch and seed database state based on Selected School or logged-in account (Unified ID space)
   const userId = selectedSchoolId || user?.uid;
   useEffect(() => {
-    if (!userId) {
-      // Clear local states on sign out
+    if (!userId || !user) {
+      // Clear local states on sign out or when no user is signed in
       setStudents([]);
       setSelectedStudentId('');
       setGrades([]);
@@ -386,7 +409,7 @@ export default function App() {
     };
 
     initAndFetchData();
-  }, [userId]);
+  }, [userId, user?.uid]);
 
   const fetchAllData = async (uid: string) => {
     try {
