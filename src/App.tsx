@@ -1468,7 +1468,7 @@ export default function App() {
 
                     {activeTab === 'billing' && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key="billing">
-                        <BillingPortal invoices={invoices} onUpdateInvoice={handleUpdateInvoiceInPlace} />
+                        <BillingPortal invoices={invoices} onUpdateInvoice={handleUpdateInvoiceInPlace} parentPhone={portalParentDetails?.phone} students={students} />
                       </motion.div>
                     )}
 
