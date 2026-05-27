@@ -85,7 +85,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
       setMomoStep(`Traitement et vérification des détails de facturation de l'envoi (${providerLabel})...`);
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      setMomoStep(`Règlement de ${payingInvoice.amount.toFixed(2)} € validé par l'opérateur local...`);
+      setMomoStep(`Règlement de ${payingInvoice.amount.toLocaleString()} FCFA validé par l'opérateur local...`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     } else {
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -120,6 +120,19 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
 
   return (
     <div className="space-y-6">
+      {/* Dynamic Alert Banner showing supported payment providers */}
+      <div className="bg-gradient-to-r from-indigo-50 to-slate-50 border border-indigo-100 rounded-2xl p-4.5 text-xs text-indigo-950 flex flex-col sm:flex-row gap-3 items-start sm:items-center shadow-2xs">
+        <div className="p-2.5 bg-indigo-100 rounded-xl text-indigo-700 shrink-0">
+          <Smartphone className="h-5 w-5" />
+        </div>
+        <div className="space-y-0.5">
+          <p className="font-extrabold text-indigo-900">💳 Modes de règlement acceptés par l'APEE</p>
+          <p className="text-gray-600 leading-relaxed font-sans">
+            Nous acceptons les paiements sécurisés par <strong>Orange Money</strong>, <strong>MTN Mobile Money (MoMo)</strong>, <strong>Wave</strong>, ou par <strong>Carte Bancaire Visa/Mastercard</strong>. Toutes les cotisations sont perçues directement en <strong>Francs CFA (FCFA)</strong>.
+          </p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between border-b pb-4 border-gray-100 flex-wrap gap-4">
         <div>
           <h2 className="text-xl font-bold font-sans text-gray-900 tracking-tight flex items-center gap-2">
@@ -238,7 +251,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                 <div className="space-y-1">
                   <span className="text-xs text-indigo-300 font-semibold uppercase tracking-widest">Paiement Sécurisé LCB</span>
                   <h3 className="text-lg font-black">{payingInvoice.title}</h3>
-                  <div className="font-mono text-xl text-yellow-300 font-bold">{payingInvoice.amount.toFixed(2)} €</div>
+                  <div className="font-mono text-xl text-yellow-300 font-bold">{payingInvoice.amount.toLocaleString()} FCFA</div>
                 </div>
               </div>
 
@@ -267,7 +280,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                     }`}
                   >
                     <Smartphone className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
-                    <span>Push MoMo</span>
+                    <span>Orange / MTN MoMo</span>
                   </button>
                   <button
                     type="button"
@@ -420,7 +433,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                             className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
                           />
                           <p className="text-[9.5px] text-gray-400">
-                            Une notification de validation de transaction de {payingInvoice.amount.toFixed(2)} € sera immédiatement envoyée sur ce numéro de mobile.
+                            Une notification de validation de transaction de {payingInvoice.amount.toLocaleString()} FCFA sera immédiatement envoyée sur ce numéro de mobile.
                           </p>
                         </div>
 
@@ -503,7 +516,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
 
                           <div className="text-center mt-3 max-w-[280px]">
                             <p className="text-xs font-extrabold text-slate-800 leading-tight">
-                              Scannez pour payer <span className="font-mono text-indigo-600 text-sm block mt-1">{payingInvoice.amount.toFixed(2)} €</span>
+                              Scannez pour payer <span className="font-mono text-indigo-600 text-sm block mt-1">{payingInvoice.amount.toLocaleString()} FCFA</span>
                             </p>
                             <p className="text-[10px] text-slate-500 mt-1.5 leading-normal">
                               Ouvrez votre application <span className="font-bold text-slate-700">{qrProvider === 'mtn' ? 'MTN MoMo' : qrProvider === 'orange' ? 'Orange Money' : 'Wave'}</span>, choisissez "Scanner Code QR", cadrez ce code puis saisissez votre code PIN pour finaliser l'opération.
@@ -537,7 +550,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                         ) : (
                           <>
                             <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                            {paymentMethod === 'qr' ? "Simuler le scan & règlement" : `Confirmer le Règlement de ${payingInvoice.amount.toFixed(2)} €`}
+                            {paymentMethod === 'qr' ? "Simuler le scan & règlement" : `Confirmer le Règlement de ${payingInvoice.amount.toLocaleString()} FCFA`}
                           </>
                         )}
                       </button>

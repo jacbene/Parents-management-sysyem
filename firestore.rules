@@ -26,9 +26,9 @@ service cloud.firestore {
 
     function isSchoolManagerOrDemo(schoolId) {
       return isSignedIn() && (
-        schoolId.startsWith('demo_school') ||
+        schoolId.matches('^demo_school.*') ||
         schoolId == request.auth.uid ||
-        schoolId.startsWith('sch_') ||
+        schoolId.matches('^sch_.*') ||
         exists(/databases/$(database)/documents/establishments/$(schoolId))
       );
     }
@@ -36,8 +36,8 @@ service cloud.firestore {
     function canViewData(parentId) {
       return isSignedIn() && (
         parentId == request.auth.uid ||
-        parentId.startsWith('demo_school') ||
-        parentId.startsWith('sch_') ||
+        parentId.matches('^demo_school.*') ||
+        parentId.matches('^sch_.*') ||
         exists(/databases/$(database)/documents/establishments/$(parentId))
       );
     }
@@ -140,7 +140,7 @@ service cloud.firestore {
     match /establishments/{establishmentId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn() && isValidId(establishmentId) && isValidEstablishment(incoming());
-      allow update, delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || establishmentId.startsWith('demo_school'));
+      allow update, delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || establishmentId.matches('^demo_school.*'));
     }
 
     // --- Students Collection ---
