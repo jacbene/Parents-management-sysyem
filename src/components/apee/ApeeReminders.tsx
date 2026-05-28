@@ -23,7 +23,7 @@ import { ApeeParent, ApeeSettings } from '../../types';
 interface ApeeRemindersProps {
   parents: ApeeParent[];
   settings: ApeeSettings;
-  onSaveParent: (parent: ApeeParent) => Promise<void>;
+  onSaveParent: (parent: ApeeParent) => Promise<boolean>;
 }
 
 export default function ApeeReminders({ parents, settings, onSaveParent }: ApeeRemindersProps) {

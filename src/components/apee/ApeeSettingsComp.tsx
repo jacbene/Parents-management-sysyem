@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Save, HelpCircle, Shield, Settings, Info, CheckCircle2, Plus, Trash2, Edit2, X, TrendingUp, Lock, Unlock, UserCheck } from 'lucide-react';
+import { Save, HelpCircle, Shield, Settings, Info, CheckCircle2, Plus, Trash2, Edit2, X, TrendingUp, Lock, Unlock, UserCheck, User, Phone, Mail, GraduationCap } from 'lucide-react';
 import { ApeeSettings, ApeeBudgetLine } from '../../types';
 
 interface ApeeSettingsProps {
@@ -12,6 +12,7 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
   const [schoolYear, setSchoolYear] = useState(settings.schoolYear);
   const [cotisationAmount, setCotisationAmount] = useState<number>(settings.cotisationAmount);
   const [financialGoal, setFinancialGoal] = useState<number>(settings.financialGoal);
+  const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
 
   // Financial Manager credentials states
   const [finManagerName, setFinManagerName] = useState(settings.finManagerName || '');
@@ -25,6 +26,44 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
   const [pedManagerPassword, setPedManagerPassword] = useState(settings.pedManagerPassword || '');
   const [showPedPassword, setShowPedPassword] = useState(false);
 
+  // Principal Administrators states
+  const [directorName, setDirectorName] = useState(settings.directorName || '');
+  const [directorPhone, setDirectorPhone] = useState(settings.directorPhone || '');
+  const [directorEmail, setDirectorEmail] = useState(settings.directorEmail || '');
+
+  const [surveillantName, setSurveillantName] = useState(settings.surveillantName || '');
+  const [surveillantPhone, setSurveillantPhone] = useState(settings.surveillantPhone || '');
+
+  const [censeurName, setCenseurName] = useState(settings.censeurName || '');
+  const [censeurPhone, setCenseurPhone] = useState(settings.censeurPhone || '');
+
+  // Class Teachers (teachers mapping list)
+  const [classTeachers, setClassTeachers] = useState(() => {
+    const defaultClassrooms = [
+      { classRoom: '6ème', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: '5ème', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: '4ème ALL', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: '4ème ESP', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: '3ème ALL', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: '3ème ESP', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: '2nde', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: '1ère', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: 'Tle', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: 'CM2-A', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: 'CE2-B', teacherName: '', teacherPhone: '', teacherEmail: '' },
+      { classRoom: 'CM1-A', teacherName: '', teacherPhone: '', teacherEmail: '' },
+    ];
+    const saved = settings.classTeachers || [];
+    const savedMapped = saved.map(s => ({
+      classRoom: s.classRoom,
+      teacherName: s.teacherName || '',
+      teacherPhone: s.teacherPhone || '',
+      teacherEmail: s.teacherEmail || '',
+    }));
+    const missingPredefined = defaultClassrooms.filter(d => !saved.some(s => s.classRoom === d.classRoom));
+    return [...savedMapped, ...missingPredefined];
+  });
+
   // Budget lines states
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [lineName, setLineName] = useState('');
@@ -32,16 +71,11 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
   const [lineDescription, setLineDescription] = useState('');
 
   // Success indicators
+  const [newClassName, setNewClassName] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('Paramètres enregistrés avec succès !');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!associationName.trim() || !schoolYear.trim() || cotisationAmount <= 0 || financialGoal <= 0) {
-      alert("Veuillez renseigner correctement l'ensemble des champs obligatoires.");
-      return;
-    }
-
+  const handleSaveWithExtra = (extra: Partial<ApeeSettings> = {}) => {
     onSaveSettings({
       associationName: associationName.trim(),
       schoolYear: schoolYear.trim(),
@@ -54,7 +88,27 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
       pedManagerName: pedManagerName.trim(),
       pedManagerPhone: pedManagerPhone.trim(),
       pedManagerPassword: pedManagerPassword.trim(),
+      logoUrl,
+      directorName: directorName.trim(),
+      directorPhone: directorPhone.trim(),
+      directorEmail: directorEmail.trim(),
+      surveillantName: surveillantName.trim(),
+      surveillantPhone: surveillantPhone.trim(),
+      censeurName: censeurName.trim(),
+      censeurPhone: censeurPhone.trim(),
+      classTeachers,
+      ...extra
     });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!associationName.trim() || !schoolYear.trim() || cotisationAmount <= 0 || financialGoal <= 0) {
+      alert("Veuillez renseigner correctement l'ensemble des champs obligatoires.");
+      return;
+    }
+
+    handleSaveWithExtra();
 
     setSuccessMessage("Paramètres généraux d'administration sauvegardés avec succès !");
     setShowSuccess(true);
@@ -91,19 +145,7 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
       setSuccessMessage("Nouvelle ligne budgétaire enregistrée.");
     }
 
-    onSaveSettings({
-      associationName,
-      schoolYear,
-      cotisationAmount,
-      financialGoal,
-      budgetLines: updatedLines,
-      finManagerName: finManagerName.trim(),
-      finManagerPhone: finManagerPhone.trim(),
-      finManagerPassword: finManagerPassword.trim(),
-      pedManagerName: pedManagerName.trim(),
-      pedManagerPhone: pedManagerPhone.trim(),
-      pedManagerPassword: pedManagerPassword.trim(),
-    });
+    handleSaveWithExtra({ budgetLines: updatedLines });
 
     // Reset budget form
     setEditingLineId(null);
@@ -136,19 +178,7 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
     const currentLines = settings.budgetLines || [];
     const updatedLines = currentLines.filter(l => l.id !== id);
 
-    onSaveSettings({
-      associationName,
-      schoolYear,
-      cotisationAmount,
-      financialGoal,
-      budgetLines: updatedLines,
-      finManagerName: finManagerName.trim(),
-      finManagerPhone: finManagerPhone.trim(),
-      finManagerPassword: finManagerPassword.trim(),
-      pedManagerName: pedManagerName.trim(),
-      pedManagerPhone: pedManagerPhone.trim(),
-      pedManagerPassword: pedManagerPassword.trim(),
-    });
+    handleSaveWithExtra({ budgetLines: updatedLines });
 
     setSuccessMessage("Ligne budgétaire supprimée de la planification annuelle.");
     setShowSuccess(true);
@@ -197,6 +227,55 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
                 placeholder="Ex: APEE CES d'Ekali 1 - MFOU"
                 className="w-full px-3 py-1.5 text-xs border rounded-lg focus:outline-indigo-505 font-medium"
               />
+            </div>
+
+            {/* Logo de l'établissement */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-600 uppercase block">Logo de l'Établissement (Visuel En-tête)</label>
+              <div className="flex gap-3 items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div className="h-14 w-14 bg-white rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center shrink-0 overflow-hidden relative shadow-3xs text-center">
+                  {logoUrl ? (
+                    <>
+                      <img src={logoUrl} alt="Logo" className="h-full w-full object-contain p-0.5" referrerPolicy="no-referrer" />
+                      <button
+                        type="button"
+                        onClick={() => setLogoUrl('')}
+                        className="absolute top-0 right-0 p-0.5 bg-red-150 hover:bg-red-250 text-red-700 rounded-bl-lg cursor-pointer transition shadow-4xs"
+                        title="Supprimer le logo"
+                      >
+                        <X className="h-2.5 w-2.5 shrink-0" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-[8px] font-extrabold uppercase text-slate-400">Aucun</span>
+                  )}
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <div className="relative overflow-hidden inline-block bg-white hover:bg-slate-50 transition border border-slate-350 px-3 py-1 rounded-lg text-[10px] font-black text-slate-800 cursor-pointer">
+                    Télécharger une image...
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 1 * 1024 * 1024) {
+                            alert("🔴 Image trop volumineuse. Veuillez choisir un fichier de moins de 1 Mo.");
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setLogoUrl(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </div>
+                  <p className="text-[9px] text-slate-400 font-medium">Se synchronise instantanément avec la barre d'en-tête globale.</p>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -369,18 +448,10 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
                     alert("Veuillez renseigner tous les champs du Responsable Financier (Nom, Téléphone et Mot de passe).");
                     return;
                   }
-                  onSaveSettings({
-                    associationName,
-                    schoolYear,
-                    cotisationAmount,
-                    financialGoal,
-                    budgetLines: settings.budgetLines || [],
+                  handleSaveWithExtra({
                     finManagerName: finManagerName.trim(),
                     finManagerPhone: finManagerPhone.trim(),
                     finManagerPassword: finManagerPassword.trim(),
-                    pedManagerName: pedManagerName.trim(),
-                    pedManagerPhone: pedManagerPhone.trim(),
-                    pedManagerPassword: pedManagerPassword.trim(),
                   });
                   setSuccessMessage("Accès du Responsable Financier enregistrés avec succès !");
                   setShowSuccess(true);
@@ -490,15 +561,7 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
                     alert("Veuillez renseigner tous les champs du Responsable Pédagogique (Nom, Téléphone et Mot de passe).");
                     return;
                   }
-                  onSaveSettings({
-                    associationName,
-                    schoolYear,
-                    cotisationAmount,
-                    financialGoal,
-                    budgetLines: settings.budgetLines || [],
-                    finManagerName: finManagerName.trim(),
-                    finManagerPhone: finManagerPhone.trim(),
-                    finManagerPassword: finManagerPassword.trim(),
+                  handleSaveWithExtra({
                     pedManagerName: pedManagerName.trim(),
                     pedManagerPhone: pedManagerPhone.trim(),
                     pedManagerPassword: pedManagerPassword.trim(),
@@ -516,6 +579,297 @@ export default function ApeeSettingsComp({ settings, onSaveSettings }: ApeeSetti
 
         </div>
 
+      </div>
+
+      {/* SECTION: School Administrators and Class Titular Teachers */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Card 1: Principal Administrators */}
+        <div className="xl:col-span-5 bg-white border border-slate-150 rounded-2xl p-4 md:p-5 space-y-4 shadow-3xs">
+          <div className="border-b pb-2 select-none">
+            <h3 className="text-xs font-bold text-slate-850 flex items-center gap-1.5 uppercase tracking-wide">
+              <GraduationCap className="h-4 w-4 text-indigo-500" /> Responsibles d'Établissement
+            </h3>
+            <p className="text-[10px] text-gray-400 mt-0.5">Saisir les contacts officiels de l'administration scolaire.</p>
+          </div>
+
+          <div className="space-y-4.5 text-xs">
+            {/* Directeur */}
+            <div className="p-3 bg-slate-50/50 border border-slate-100 rounded-xl space-y-2.5">
+              <span className="font-bold text-slate-800 text-[11px] block">Directorat (Le Directeur)</span>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[9px] font-bold text-slate-550 uppercase">Nom complet du Directeur</label>
+                  <div className="relative mt-0.5">
+                    <User className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 bg-white"
+                      placeholder="Nom et prénoms du Directeur"
+                      value={directorName}
+                      onChange={(e) => setDirectorName(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-550 uppercase">Téléphone</label>
+                    <div className="relative mt-0.5">
+                      <Phone className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 bg-white"
+                        placeholder="Ex: +237 6xx..."
+                        value={directorPhone}
+                        onChange={(e) => setDirectorPhone(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-550 uppercase">Email / Contact</label>
+                    <div className="relative mt-0.5">
+                      <Mail className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 bg-white"
+                        placeholder="Ex: secretariat@ecole..."
+                        value={directorEmail}
+                        onChange={(e) => setDirectorEmail(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Surveillant Général */}
+            <div className="p-3 bg-slate-50/50 border border-slate-100 rounded-xl space-y-2.5">
+              <span className="font-bold text-slate-800 text-[11px] block">Surveillance Générale (Le Surveillant)</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] font-bold text-slate-550 uppercase">Nom du Surveillant</label>
+                  <div className="relative mt-0.5">
+                    <User className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 bg-white"
+                      placeholder="Nom complet"
+                      value={surveillantName}
+                      onChange={(e) => setSurveillantName(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-550 uppercase">Téléphone</label>
+                  <div className="relative mt-0.5">
+                    <Phone className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 bg-white"
+                      placeholder="Numéro de téléphone"
+                      value={surveillantPhone}
+                      onChange={(e) => setSurveillantPhone(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Censeur */}
+            <div className="p-3 bg-slate-50/50 border border-slate-100 rounded-xl space-y-2.5">
+              <span className="font-bold text-slate-800 text-[11px] block">Censeur Principal (L'Inspecteur/Censeur)</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] font-bold text-slate-550 uppercase">Nom du Censeur</label>
+                  <div className="relative mt-0.5">
+                    <User className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 bg-white"
+                      placeholder="Nom complet"
+                      value={censeurName}
+                      onChange={(e) => setCenseurName(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-550 uppercase">Téléphone</label>
+                  <div className="relative mt-0.5">
+                    <Phone className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 bg-white"
+                      placeholder="Numéro de téléphone"
+                      value={censeurPhone}
+                      onChange={(e) => setCenseurPhone(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                handleSaveWithExtra({
+                  directorName: directorName.trim(),
+                  directorPhone: directorPhone.trim(),
+                  directorEmail: directorEmail.trim(),
+                  surveillantName: surveillantName.trim(),
+                  surveillantPhone: surveillantPhone.trim(),
+                  censeurName: censeurName.trim(),
+                  censeurPhone: censeurPhone.trim(),
+                });
+                setSuccessMessage("Responsables administratifs enregistrés avec succès !");
+                setShowSuccess(true);
+                setTimeout(() => setShowSuccess(false), 3500);
+              }}
+              className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-1.5 cursor-pointer transition shadow-2xs mt-2"
+            >
+              <Save className="h-4 w-4" /> Enregistrer les Responsables
+            </button>
+          </div>
+        </div>
+
+        {/* Card 2: Per-Class Titular Teachers */}
+        <div className="xl:col-span-7 bg-white border border-slate-150 rounded-2xl p-4 md:p-5 space-y-4 shadow-3xs">
+          <div className="border-b pb-2 select-none flex justify-between items-center">
+            <div>
+              <h3 className="text-xs font-bold text-slate-850 flex items-center gap-1.5 uppercase tracking-wide">
+                <UserCheck className="h-4 w-4 text-emerald-500" /> Professeurs Titulaires par Classe
+              </h3>
+              <p className="text-[10px] text-gray-400 mt-0.5">Associer chaque niveau de classe à un enseignant titulaire attitré.</p>
+            </div>
+            <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full font-bold text-slate-600">
+              {classTeachers.length} classes configurées
+            </span>
+          </div>
+
+          <div className="space-y-4">
+            {/* Scrollable teachers inputs list */}
+            <div className="max-h-[380px] overflow-y-auto pr-2 divide-y divide-slate-100 space-y-4">
+              {classTeachers.map((teach, idx) => (
+                <div key={idx} className="pt-4 first:pt-0 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10.5px] font-black bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-lg">
+                        {teach.classRoom}
+                      </span>
+                      <span className="text-[10px] font-semibold text-slate-500 italic">Enseignant Titulaire</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Voulez-vous vraiment supprimer la configuration pour la classe ${teach.classRoom} ?`)) {
+                          setClassTeachers(classTeachers.filter((_, idxFilter) => idxFilter !== idx));
+                        }
+                      }}
+                      className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition cursor-pointer"
+                      title={`Supprimer la classe ${teach.classRoom}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">Nom complet</label>
+                      <input
+                        type="text"
+                        className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 mt-0.5"
+                        placeholder="Ex: M. Jean Picard"
+                        value={teach.teacherName}
+                        onChange={(e) => {
+                          const updated = [...classTeachers];
+                          updated[idx].teacherName = e.target.value;
+                          setClassTeachers(updated);
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">Téléphone</label>
+                      <input
+                        type="text"
+                        className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 mt-0.5"
+                        placeholder="Ex: +237 6xx..."
+                        value={teach.teacherPhone || ''}
+                        onChange={(e) => {
+                          const updated = [...classTeachers];
+                          updated[idx].teacherPhone = e.target.value;
+                          setClassTeachers(updated);
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">Email / Contact</label>
+                      <input
+                        type="text"
+                        className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-indigo-500 mt-0.5 text-slate-650"
+                        placeholder="Ex: jean.picard@ecole..."
+                        value={teach.teacherEmail || ''}
+                        onChange={(e) => {
+                          const updated = [...classTeachers];
+                          updated[idx].teacherEmail = e.target.value;
+                          setClassTeachers(updated);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Form to add a new classroom division */}
+            <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 flex gap-2 items-end">
+              <div className="flex-1 space-y-1">
+                <label className="text-[9px] font-bold text-slate-600 uppercase">Ajouter une classe sur-mesure</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 6ème A, 4ème ALL 2, CM2..."
+                  value={newClassName}
+                  onChange={(e) => setNewClassName(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-indigo-500"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newClassName.trim()) {
+                    alert("Le nom de la classe ne peut pas être vide.");
+                    return;
+                  }
+                  if (classTeachers.some(t => t.classRoom.trim().toLowerCase() === newClassName.trim().toLowerCase())) {
+                    alert("Cette classe existe déjà dans la liste.");
+                    return;
+                  }
+                  setClassTeachers([
+                    ...classTeachers,
+                    { classRoom: newClassName.trim(), teacherName: '', teacherPhone: '', teacherEmail: '' }
+                  ]);
+                  setNewClassName('');
+                }}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
+              >
+                <Plus className="h-3.5 w-3.5" /> Ajouter
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                handleSaveWithExtra({
+                  classTeachers: classTeachers,
+                });
+                setSuccessMessage("Liste des professeurs titulaires mise à jour !");
+                setShowSuccess(true);
+                setTimeout(() => setShowSuccess(false), 3500);
+              }}
+              className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-1.5 cursor-pointer transition shadow-2xs mt-2"
+            >
+              <Save className="h-4 w-4" /> Mettre à jour les Professeurs
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* NEW SECTION: Annual Budget Lines Allocation */}

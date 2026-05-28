@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Student, Grade, Attendance } from '../types';
+import { Student, Grade, Attendance, ApeeSettings } from '../types';
+import { jsPDF } from 'jspdf';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
   Printer, 
@@ -16,7 +18,8 @@ import {
   NotebookPen,
   Download,
   BarChart2,
-  TrendingUp
+  TrendingUp,
+  Phone
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 
@@ -26,10 +29,29 @@ interface StudentPrintModalProps {
   attendance: Attendance[];
   isOpen: boolean;
   onClose: () => void;
+  settings?: ApeeSettings;
 }
 
-export default function StudentPrintModal({ student, grades, attendance, isOpen, onClose }: StudentPrintModalProps) {
+export default function StudentPrintModal({ student, grades, attendance, isOpen, onClose, settings }: StudentPrintModalProps) {
   const [showChart, setShowChart] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
+  const [showPrintToast, setShowPrintToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Find titular teacher for student's classroom in global ApeeSettings
+  const foundTeacher = settings?.classTeachers?.find(t => {
+    const classRoomName = student.classRoom || '';
+    return t.classRoom.toLowerCase() === classRoomName.toLowerCase() || 
+           classRoomName.toLowerCase().includes(t.classRoom.toLowerCase()) ||
+           t.classRoom.toLowerCase().includes(classRoomName.toLowerCase());
+  });
+
+  const teacherName = foundTeacher?.teacherName || student.teacherName || 'Enseignant principal';
+  const teacherEmail = foundTeacher?.teacherEmail || student.teacherEmail || '';
+  const teacherPhone = foundTeacher?.teacherPhone || '';
 
   useEffect(() => {
     // Disable main window scroll when open
@@ -97,6 +119,11 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
   });
 
   const handlePrint = () => {
+    setToastMessage("Report successfully sent to printer");
+    setShowPrintToast(true);
+    setTimeout(() => {
+      setShowPrintToast(false);
+    }, 5500);
     window.print();
   };
 
@@ -191,12 +218,480 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    let y = 15;
+    const margin = 15;
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const contentWidth = pageWidth - (2 * margin); // 180mm
+
+    const checkPageBreak = (heightNeeded: number) => {
+      if (y + heightNeeded > pageHeight - 20) {
+        doc.addPage();
+        drawPageHeaderFooter();
+        y = 25; // Reset y to top margin on new page
+      }
+    };
+
+    const drawPageHeaderFooter = () => {
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(margin, 12, margin + contentWidth, 12);
+      
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text(`Bulletin de situation - ${student.name} - Classe : ${student.grade} ${student.classRoom}`, margin, 9);
+    };
+
+    // Elegant accent: Deep indigo header bar
+    doc.setFillColor(79, 70, 229); // Primary Indigo
+    doc.rect(margin, y, 4, 18, 'F');
+
+    // Title text
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(79, 70, 229);
+    doc.text("PORTAIL SCOLAIRE PASMA-SYS • BULLETIN SCOLAIRE", margin + 6, y + 4);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text("BILAN DE CONFIGURATION SCOLAIRE & NOTES", margin + 6, y + 12);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text(`Édité le ${new Date().toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}`, margin + 6, y + 17);
+
+    y += 24;
+
+    // Student & Pedagogical Supervisor Card
+    doc.setFillColor(248, 250, 252); // Slate 50
+    doc.setDrawColor(226, 232, 240); // Slate 200
+    doc.setLineWidth(0.3);
+    doc.rect(margin, y, contentWidth, 34, 'FD'); // 34mm height
+
+    // Left block: Student details
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text(student.name.toUpperCase(), margin + 5, y + 7);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105); // Slate 600
+    doc.text(`Né(e) le: ${new Date(student.dob).toLocaleDateString('fr-FR', { dateStyle: 'long' })}`, margin + 5, y + 14);
+    doc.text(`Niveau / Classe: ${student.grade} • ${student.classRoom}`, margin + 5, y + 20);
+    
+    // Status badges or additional key
+    doc.setFillColor(238, 242, 255); // Indigo 100
+    doc.rect(margin + 5, y + 24, 45, 6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(79, 70, 229); // Indigo 700
+    doc.text("ÉLÈVE INSCRIT ET ACTIF", margin + 8, y + 28);
+
+    // Vertical separator line
+    doc.setDrawColor(203, 213, 225); // Slate 300
+    doc.line(margin + 90, y + 4, margin + 90, y + 30);
+
+    // Right block: Supervisor details
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text("SUPERVISEUR PÉDAGOGIQUE", margin + 95, y + 7);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105); // Slate 600
+    doc.text(`Professeur principal: ${teacherName}`, margin + 95, y + 14);
+    if (teacherPhone) {
+      doc.text(`Téléphone: ${teacherPhone}`, margin + 95, y + 20);
+    } else {
+      doc.text(`Téléphone: Non répertorié`, margin + 95, y + 20);
+    }
+    if (teacherEmail) {
+      doc.text(`E-mail: ${teacherEmail}`, margin + 95, y + 26);
+    } else {
+      doc.text(`E-mail: Non disponible`, margin + 95, y + 26);
+    }
+
+    y += 39;
+
+    // KPI widgets side-by-side
+    const colWidth = (contentWidth - 6) / 2; // 87mm each
+
+    // Card 1: Rendement Académique (Academic Performance)
+    doc.setFillColor(245, 247, 255); // Very soft indigo-tinted background
+    doc.setDrawColor(199, 210, 254); // Indigo 200
+    doc.rect(margin, y, colWidth, 26, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(79, 70, 229); // Indigo 700
+    doc.text("RENDEMENT ACADÉMIQUE", margin + 5, y + 6);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    const finalAvg = totalTests > 0 ? averageBase20.toFixed(2) : '--';
+    doc.text(`${finalAvg} / 20`, margin + 5, y + 15);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text(`Appréciation: ${totalTests > 0 ? apprec.text : 'Non évalué'}`, margin + 5, y + 22);
+
+    // Card 2: Assiduité (Attendance)
+    doc.setFillColor(240, 253, 244); // Very soft mint/green-tinted background
+    doc.setDrawColor(187, 247, 208); // Green 200
+    doc.rect(margin + colWidth + 6, y, colWidth, 26, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(22, 101, 52); // Green 850
+    doc.text("TAUX D'ASSIDUITÉ", margin + colWidth + 11, y + 6);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42); // Slate 950
+    doc.text(`${presenceRate}%`, margin + colWidth + 11, y + 15);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105); // Slate 600
+    doc.text(`${presentCount} Prés. | ${lateCount} Ret. | ${absentCount} Abs. | ${excusedCount} Exc.`, margin + colWidth + 11, y + 22);
+
+    y += 32;
+
+    // Averages per Subject (Bilan par Discipline)
+    if (subjectChartData.length > 0) {
+      checkPageBreak(35);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42); // Slate 900
+      doc.text("RÉCAPITULATIF DES MOYENNES PAR DISCIPLINE", margin, y + 5);
+      
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(margin, y + 7, margin + contentWidth, y + 7);
+      
+      y += 10;
+
+      // Table of averages
+      doc.setFillColor(241, 245, 249); // Slate 100
+      doc.rect(margin, y, contentWidth, 7, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(51, 65, 85); // Slate 700
+      doc.text("Discipline / Matière", margin + 4, y + 4.5);
+      doc.text("Moyenne obtenue", margin + 100, y + 4.5);
+      doc.text("Seuil d'admissibilité", margin + 140, y + 4.5);
+      
+      y += 7;
+
+      subjectChartData.forEach((row, rIdx) => {
+        checkPageBreak(7);
+        if (rIdx % 2 === 0) {
+          doc.setFillColor(248, 250, 252); // Slate 50
+          doc.rect(margin, y, contentWidth, 6, 'F');
+        }
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(15, 23, 42);
+        doc.text(row.subject, margin + 4, y + 4);
+        
+        const avgVal = row.Moyenne;
+        if (avgVal < 10) {
+          doc.setTextColor(239, 68, 68); // Red-500
+          doc.setFont('helvetica', 'bold');
+        } else {
+          doc.setTextColor(79, 70, 229); // Indigo-600
+          doc.setFont('helvetica', 'bold');
+        }
+        doc.text(`${avgVal.toFixed(2)} / 20`, margin + 100, y + 4);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        doc.text("10.00 / 20", margin + 140, y + 4);
+        
+        y += 6;
+      });
+      
+      y += 5;
+    }
+
+    // Detailed test-by-test report (TABLE DES ÉVALUATIONS DE NOTES)
+    checkPageBreak(25);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text("TABLEAU DÉTAILLÉ DES ÉVALUATIONS ET EXAMENS", margin, y + 5);
+    
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y + 7, margin + contentWidth, y + 7);
+    
+    y += 10;
+
+    // Detailed table headers
+    doc.setFillColor(79, 70, 229); // Primary Indigo header
+    doc.rect(margin, y, contentWidth, 8, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255); // White font
+    doc.text("Matière", margin + 3, y + 5);
+    doc.text("Examen", margin + 45, y + 5);
+    doc.text("Date", margin + 85, y + 5);
+    doc.text("Note / Barème", margin + 110, y + 5);
+    doc.text("Appréciation & Observations", margin + 135, y + 5);
+
+    y += 8;
+
+    const truncateString = (text: string, maxChars: number) => {
+      return text.length > maxChars ? text.substring(0, maxChars - 3) + '...' : text;
+    };
+
+    if (grades.length === 0) {
+      checkPageBreak(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text("Aucune note de contrôle enregistrée pour cet élève.", margin + 4, y + 5);
+      y += 8;
+    } else {
+      grades.forEach((g, gIdx) => {
+        checkPageBreak(8);
+
+        if (gIdx % 2 === 0) {
+          doc.setFillColor(248, 250, 252); // Slate 50
+          doc.rect(margin, y, contentWidth, 7, 'F');
+        }
+
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.15);
+        doc.line(margin, y + 7, margin + contentWidth, y + 7);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(15, 23, 42); // Slate 900
+        
+        doc.text(truncateString(g.subject, 18), margin + 3, y + 4.5);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85); // Slate 700
+        doc.text(truncateString(g.examName, 20), margin + 45, y + 4.5);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139); // Slate 500
+        doc.text(new Date(g.date).toLocaleDateString('fr-FR'), margin + 85, y + 4.5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(15, 23, 42); // Slate 900
+        doc.text(`${g.score} / ${g.maxScore}`, margin + 110, y + 4.5);
+
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139); // Slate 500
+        const remarks = g.teacherRemarks || "Aucun commentaire";
+        doc.text(truncateString(remarks, 24), margin + 135, y + 4.5);
+
+        y += 7;
+      });
+    }
+
+    y += 6;
+
+    // Detailed attendance report
+    checkPageBreak(25);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42); // Slate 950
+    doc.text("RAPPORT DU REGISTRE DE PRÉSENCE ET ASSIDUITÉ", margin, y + 5);
+    
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y + 7, margin + contentWidth, y + 7);
+    
+    y += 10;
+
+    // Attendance Table Header
+    doc.setFillColor(51, 65, 85); // Charcoal / Slate 700 header
+    doc.rect(margin, y, contentWidth, 8, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255); // White font
+    doc.text("Date du contrôle", margin + 3, y + 5);
+    doc.text("Statut de présence", margin + 55, y + 5);
+    doc.text("Motif justificatif / Remarques de la vie scolaire", margin + 100, y + 5);
+
+    y += 8;
+
+    if (attendance.length === 0) {
+      checkPageBreak(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text("Aucun retard ou absence répertorié au dossier de présence.", margin + 4, y + 5);
+      y += 8;
+    } else {
+      attendance.forEach((att, attIdx) => {
+        checkPageBreak(8);
+
+        if (attIdx % 2 === 0) {
+          doc.setFillColor(248, 250, 252); // Slate 50
+          doc.rect(margin, y, contentWidth, 7, 'F');
+        }
+
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.15);
+        doc.line(margin, y + 7, margin + contentWidth, y + 7);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(15, 23, 42); // Slate 900
+        doc.text(new Date(att.date).toLocaleDateString('fr-FR', { dateStyle: 'long' }), margin + 3, y + 4.5);
+
+        let statusFr = 'Présent';
+        if (att.status === 'Present') {
+          doc.setTextColor(22, 101, 52); // Green
+          statusFr = 'Présent';
+        } else if (att.status === 'Absent') {
+          doc.setTextColor(185, 28, 28); // Red
+          statusFr = 'Absent';
+        } else if (att.status === 'Late') {
+          doc.setTextColor(180, 83, 9); // Amber
+          statusFr = 'En Retard';
+        } else if (att.status === 'Excused') {
+          doc.setTextColor(79, 70, 229); // Indigo
+          statusFr = 'Justifié';
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.text(statusFr, margin + 55, y + 4.5);
+
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139); // Slate 500
+        const altRemark = att.remarks || (att.status === 'Present' ? 'Élève ponctuel et assidu' : 'Aucun motif renseigné');
+        doc.text(truncateString(altRemark, 42), margin + 100, y + 4.5);
+
+        y += 7;
+      });
+    }
+
+    y += 6;
+
+    // Administrative signatures block
+    checkPageBreak(40);
+    
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y + 5, margin + contentWidth, y + 5);
+
+    y += 12;
+
+    const signatureWidth = contentWidth / 3;
+
+    // Column 1: Teacher
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(51, 65, 85); // Slate 700
+    doc.text("L'Enseignant Principal", margin + (signatureWidth / 2), y, { align: 'center' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(teacherName, margin + (signatureWidth / 2), y + 5, { align: 'center' });
+
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.2);
+    doc.line(margin + 10, y + 22, margin + signatureWidth - 10, y + 22);
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Signature & Date", margin + (signatureWidth / 2), y + 26, { align: 'center' });
+
+    // Column 2: Principal/Director
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(51, 65, 85);
+    doc.text("Le Directeur d'Établissement", margin + signatureWidth + (signatureWidth / 2), y, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    const dName = settings?.directorName || 'Administration';
+    doc.text(dName, margin + signatureWidth + (signatureWidth / 2), y + 5, { align: 'center' });
+
+    doc.line(margin + signatureWidth + 10, y + 22, margin + 2 * signatureWidth - 10, y + 22);
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Cachet et signature", margin + signatureWidth + (signatureWidth / 2), y + 26, { align: 'center' });
+
+    // Column 3: Parents
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(51, 65, 85);
+    doc.text("Signature des Parents", margin + 2 * signatureWidth + (signatureWidth / 2), y, { align: 'center' });
+
+    doc.line(margin + 2 * signatureWidth + 10, y + 22, margin + 3 * signatureWidth - 10, y + 22);
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Mention 'Lu et Approuvé'", margin + 2 * signatureWidth + (signatureWidth / 2), y + 26, { align: 'center' });
+
+    y += 36;
+
+    // Footnote
+    checkPageBreak(18);
+    doc.setDrawColor(241, 245, 249);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, margin + contentWidth, y);
+    
+    y += 5;
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184); // Slate 400
+    doc.text("Ce bulletin de situation fait foi sous réserve de vérification physique auprès de la Direction d'École.", margin + (contentWidth / 2), y, { align: 'center' });
+    doc.text("Portail Scolaire Pasma-sys • Administré par Jacques Bene Mbama (+237 656 454 053).", margin + (contentWidth / 2), y + 4, { align: 'center' });
+
+    // Multi-page numbers numbering
+    const totalPages = (doc.internal as any).getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+       doc.setPage(i);
+       doc.setFont('helvetica', 'normal');
+       doc.setFontSize(7.5);
+       doc.setTextColor(148, 163, 184);
+       doc.text(`Page ${i} sur ${totalPages}`, margin + contentWidth, pageHeight - 8, { align: 'right' });
+       doc.text("PASMA-SYS ENT • BULLETIN TRIMESTRIEL DE L'ÉLÈVE", margin, pageHeight - 8);
+    }
+
+    const safePdfFileName = student.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    doc.save(`bulletin_${safePdfFileName}.pdf`);
+  };
+
   const isImageAvatar = (avatar: string) => {
     return avatar.startsWith('data:image') || avatar.startsWith('http') || avatar.startsWith('/');
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[1000] no-print">
+    <div className="StudentPrintModal fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[1000] no-print">
       
       {/* Print Style Injector */}
       <style dangerouslySetInnerHTML={{ __html: `
@@ -286,7 +781,7 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
                   </h2>
                   <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5" />
-                    Édité le {new Date().toLocaleDateString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}
+                    Édité le {new Date().toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}
                   </p>
                 </div>
                 
@@ -325,8 +820,13 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
                 <div className="md:col-span-5 border-t md:border-t-0 md:border-l border-slate-200 pt-3 md:pt-0 md:pl-5 space-y-1 text-xs text-slate-700">
                   <span className="text-[9px] uppercase font-black text-slate-400 tracking-wider block">Superviseur Pédagogique</span>
                   <div className="font-medium space-y-1 text-[11px]">
-                    <p className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-gray-400" /> Enseignant principal : <strong>{student.teacherName}</strong></p>
-                    <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-gray-400" /> Email direct : <strong className="font-mono text-slate-600">{student.teacherEmail}</strong></p>
+                    <p className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-gray-400" /> Enseignant principal : <strong>{teacherName}</strong></p>
+                    {teacherPhone && (
+                      <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-gray-400" /> Téléphone : <strong className="font-mono text-slate-600">{teacherPhone}</strong></p>
+                    )}
+                    {teacherEmail && (
+                      <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-gray-400" /> Email direct : <strong className="font-mono text-slate-600">{teacherEmail}</strong></p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -403,24 +903,28 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
                     <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">PASMA-ENT ANALYTICS</span>
                   </div>
                   <div className="h-48 w-full text-[10px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={subjectChartData} margin={{ top: 15, right: 10, left: -25, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                        <XAxis dataKey="subject" tick={{ fontSize: 9, fill: '#475569', fontWeight: 600 }} tickLine={false} />
-                        <YAxis domain={[0, 20]} ticks={[0, 5, 10, 15, 20]} tick={{ fontSize: 9, fill: '#475569' }} tickLine={false} />
-                        <Tooltip 
-                          formatter={(value) => [`${value} / 20`, 'Moyenne scolaire']}
-                          contentStyle={{ fontSize: 10, borderRadius: 8, borderColor: '#cbd5e1' }}
-                        />
-                        <Bar dataKey="Moyenne" fill="#4f46e5" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                          {subjectChartData.map((entry, index) => {
-                            const isBelowMoyenne = entry.Moyenne < 10;
-                            return <Cell key={`cell-${index}`} fill={isBelowMoyenne ? '#ef4444' : '#4f46e5'} />;
-                          })}
-                        </Bar>
-                        <ReferenceLine y={10} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'Seuil de Réussite (10/20)', fill: '#ef4444', fontSize: 8, position: 'top', fontWeight: 'bold' }} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={192} minWidth={0}>
+                        <BarChart data={subjectChartData} margin={{ top: 15, right: 10, left: -25, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                          <XAxis dataKey="subject" tick={{ fontSize: 9, fill: '#475569', fontWeight: 600 }} tickLine={false} />
+                          <YAxis domain={[0, 20]} ticks={[0, 5, 10, 15, 20]} tick={{ fontSize: 9, fill: '#475569' }} tickLine={false} />
+                          <Tooltip 
+                            formatter={(value) => [`${value} / 20`, 'Moyenne scolaire']}
+                            contentStyle={{ fontSize: 10, borderRadius: 8, borderColor: '#cbd5e1' }}
+                          />
+                          <Bar dataKey="Moyenne" fill="#4f46e5" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                            {subjectChartData.map((entry, index) => {
+                              const isBelowMoyenne = entry.Moyenne < 10;
+                              return <Cell key={`cell-${index}`} fill={isBelowMoyenne ? '#ef4444' : '#4f46e5'} />;
+                            })}
+                          </Bar>
+                          <ReferenceLine y={10} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'Seuil de Réussite (10/20)', fill: '#ef4444', fontSize: 8, position: 'top', fontWeight: 'bold' }} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full bg-slate-50 rounded-xl animate-pulse flex items-center justify-center text-xs text-slate-405 font-medium font-sans">Chargement...</div>
+                    )}
                   </div>
                 </div>
               )}
@@ -521,11 +1025,17 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
               {/* Administrative signatures spaces for print output only */}
               <div className="grid grid-cols-3 gap-6 pt-12 items-start text-center text-xs font-sans">
                 <div className="space-y-16">
-                  <p className="font-bold text-slate-800">Enseignant Principal</p>
+                  <div>
+                    <p className="font-bold text-slate-800">Enseignant Principal</p>
+                    <p className="text-[10px] text-slate-500 mt-1 font-medium">{teacherName}</p>
+                  </div>
                   <div className="border-t border-slate-300 mx-auto w-36 pt-1 text-[10px] text-gray-400">Signature & Date</div>
                 </div>
                 <div className="space-y-16">
-                  <p className="font-bold text-slate-800">Le Directeur d'Établissement</p>
+                  <div>
+                    <p className="font-bold text-slate-800">Le Directeur d'Établissement</p>
+                    {settings?.directorName && <p className="text-[10px] text-slate-500 mt-1 font-medium">{settings.directorName}</p>}
+                  </div>
                   <div className="border-t border-slate-300 mx-auto w-36 pt-1 text-[10px] text-gray-400">Cachet officiel</div>
                 </div>
                 <div className="space-y-16">
@@ -585,14 +1095,40 @@ export default function StudentPrintModal({ student, grades, attendance, isOpen,
               type="button"
               onClick={handlePrint}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition flex items-center gap-2 active:scale-97"
+              title="Lancer l'impression directe du rapport"
             >
               <Printer className="h-4 w-4" />
-              <span>Imprimer ou Enregistrer en PDF</span>
+              <span>Lancer l'Impression</span>
             </button>
           </div>
         </div>
 
       </div>
+
+      <AnimatePresence>
+        {showPrintToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-24 right-6 z-[3000] bg-slate-900 border border-slate-700/50 text-white rounded-2xl p-4 shadow-xl flex items-center gap-3.5 max-w-sm no-print no-print-interface"
+          >
+            <div className="h-9 w-9 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/30 shrink-0">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-emerald-400">Impression</h4>
+              <p className="text-[12px] font-semibold text-slate-100 leading-normal mt-0.5">{toastMessage}</p>
+            </div>
+            <button
+              onClick={() => setShowPrintToast(false)}
+              className="text-slate-400 hover:text-white transition p-1 hover:bg-slate-800 rounded-lg cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

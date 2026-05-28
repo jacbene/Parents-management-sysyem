@@ -1,27 +1,71 @@
 import React, { useState } from 'react';
-import { Invoice } from '../types';
-import { CreditCard, ShieldCheck, CheckCircle2, AlertCircle, Sparkles, X, Landmark, Receipt } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { Invoice, Student } from '../types';
+import { CreditCard, ShieldCheck, CheckCircle2, AlertCircle, Sparkles, X, Landmark, Receipt, QrCode, Smartphone } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import PaymentMethodSelector from './PaymentMethodSelector';
 
 interface BillingPortalProps {
   invoices: Invoice[];
   onUpdateInvoice: (updated: Invoice) => void;
+  parentPhone?: string;
+  students?: Student[];
+  portalUserRole?: 'manager' | 'parent' | null;
+  filteredStudents?: Student[];
 }
 
-export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPortalProps) {
+export default function BillingPortal({ 
+  invoices, 
+  onUpdateInvoice, 
+  parentPhone, 
+  students,
+  portalUserRole,
+  filteredStudents
+}: BillingPortalProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'unpaid' | 'paid'>('all');
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
-  const [cardholderName, setCardholderName] = useState('');
-  const [processing, setProcessing] = useState(false);
-  const [success, setSuccess] = useState(false);
 
-  // Filter invoices
-  const filteredInvoices = invoices.filter(inv => {
+  // Helper to format currency and fetch student name
+  const student = payingInvoice ? students?.find(s => s.id === payingInvoice.studentId) : null;
+  const studentName = student ? student.name : "Élève de l'établissement";
+  const studentInfo = student ? `${student.grade} - ${student.classRoom}` : "";
+
+  const formatAmountTtc = (amount: number) => {
+    if (amount < 2000) {
+      const fcfaVal = Math.round(amount * 655.957);
+      return {
+        euro: `${amount.toFixed(2)} €`,
+        fcfa: `${fcfaVal.toLocaleString('fr-FR')} FCFA`,
+      };
+    } else {
+      const euroVal = amount / 655.957;
+      return {
+        euro: `${euroVal.toFixed(2)} €`,
+        fcfa: `${amount.toLocaleString('fr-FR')} FCFA`,
+      };
+    }
+  };
+
+  const formatted = payingInvoice ? formatAmountTtc(payingInvoice.amount) : { euro: '0.00 €', fcfa: '0 FCFA' };
+
+  // Filter out non-student (administrative/settings/cotisation parent) documents
+  const studentInvoices = invoices.filter(inv => {
+    if (
+      inv.studentId === 'apee_ces_ekali_1' ||
+      inv.studentId === 'apee_expense' ||
+      inv.studentId === 'apee_settings' ||
+      inv.id.endsWith('_settings')
+    ) {
+      return false;
+    }
+    // If the active role is parent and filteredStudents list is available, restrict to matching active pupils
+    if (portalUserRole === 'parent' && filteredStudents) {
+      return filteredStudents.some(s => s.id === inv.studentId);
+    }
+    return true;
+  });
+
+  // Filter invoices for tabs
+  const filteredInvoices = studentInvoices.filter(inv => {
     if (activeTab === 'unpaid') return inv.status === 'Unpaid' || inv.status === 'Overdue';
     if (activeTab === 'paid') return inv.status === 'Paid';
     return true;
@@ -40,51 +84,23 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
 
   const startPayment = (invoice: Invoice) => {
     setPayingInvoice(invoice);
-    setCardNumber('');
-    setExpiry('');
-    setCvv('');
-    setCardholderName('');
-    setSuccess(false);
-  };
-
-  const handleSimulatedPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!payingInvoice) return;
-
-    setProcessing(true);
-
-    // Simulate payment processing time
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    try {
-      const parentIdPart = payingInvoice.parentId;
-      const invRef = doc(db, 'invoices', payingInvoice.id);
-      const paidDate = new Date().toISOString().split('T')[0];
-
-      await updateDoc(invRef, {
-        status: 'Paid',
-        paymentDate: paidDate
-      });
-
-      // Update local state in App shell
-      onUpdateInvoice({
-        ...payingInvoice,
-        status: 'Paid',
-        paymentDate: paidDate
-      });
-
-      setSuccess(true);
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      setPayingInvoice(null);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `invoices/${payingInvoice.id}`);
-    } finally {
-      setProcessing(false);
-    }
   };
 
   return (
     <div className="space-y-6">
+      {/* Dynamic Alert Banner showing supported payment providers */}
+      <div className="bg-gradient-to-r from-indigo-50 to-slate-50 border border-indigo-100 rounded-2xl p-4.5 text-xs text-indigo-950 flex flex-col sm:flex-row gap-3 items-start sm:items-center shadow-2xs">
+        <div className="p-2.5 bg-indigo-100 rounded-xl text-indigo-700 shrink-0">
+          <Smartphone className="h-5 w-5" />
+        </div>
+        <div className="space-y-0.5">
+          <p className="font-extrabold text-indigo-900">💳 Modes de règlement acceptés par l'APEE</p>
+          <p className="text-gray-600 leading-relaxed font-sans">
+            Nous acceptons les paiements sécurisés par <strong>Orange Money</strong>, <strong>MTN Mobile Money (MoMo)</strong>, <strong>Wave</strong>, ou par <strong>Carte Bancaire Visa/Mastercard</strong>. Toutes les cotisations sont perçues directement en <strong>Francs CFA (FCFA)</strong>.
+          </p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between border-b pb-4 border-gray-100 flex-wrap gap-4">
         <div>
           <h2 className="text-xl font-bold font-sans text-gray-900 tracking-tight flex items-center gap-2">
@@ -92,7 +108,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
             Régie Financière & Facturation
           </h2>
           <p className="text-sm text-gray-500">
-            Paiement sécurisé en ligne des frais de scolarité, de cantine et d'activités périscolaires.
+            Paiement sécurisé en ligne des frais de scolarité, de cantine, d'APEE et d'activités périscolaires.
           </p>
         </div>
 
@@ -106,7 +122,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                 : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            Tous ({invoices.length})
+            Tous ({studentInvoices.length})
           </button>
           <button
             onClick={() => setActiveTab('unpaid')}
@@ -116,7 +132,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                 : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            À Payer ({invoices.filter(i => i.status !== 'Paid').length})
+            À Payer ({studentInvoices.filter(i => i.status !== 'Paid').length})
           </button>
           <button
             onClick={() => setActiveTab('paid')}
@@ -126,7 +142,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                 : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            Payés ({invoices.filter(i => i.status === 'Paid').length})
+            Payés ({studentInvoices.filter(i => i.status === 'Paid').length})
           </button>
         </div>
       </div>
@@ -166,15 +182,19 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
 
               <div className="flex items-center gap-5">
                 <div className="text-right">
-                  <div className="text-xl font-black text-gray-900 font-mono">{inv.amount.toFixed(2)} €</div>
-                  <span className="text-[10px] text-gray-400">Total Taxe Incluse</span>
+                  <div className="text-base font-black text-indigo-750 font-mono">
+                    {formatAmountTtc(inv.amount).fcfa}
+                  </div>
+                  <span className="text-[10px] text-gray-400 block">
+                    soit {formatAmountTtc(inv.amount).euro} (TTC)
+                  </span>
                 </div>
                 {inv.status !== 'Paid' && (
                   <button
                     onClick={() => startPayment(inv)}
                     className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer hover:bg-indigo-700 transition"
                   >
-                    <CreditCard className="h-3.5 w-3.5" /> Payer
+                    <CreditCard className="h-3.5 w-3.5" /> Payer ma dette
                   </button>
                 )}
               </div>
@@ -191,7 +211,7 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl w-full max-w-md border border-gray-100 shadow-2xl overflow-hidden"
+              className="bg-white rounded-3xl w-full max-w-md border border-gray-100 shadow-2xl overflow-hidden animate-fade-in"
             >
               <div className="p-5 bg-slate-900 text-white relative">
                 <button
@@ -201,126 +221,74 @@ export default function BillingPortal({ invoices, onUpdateInvoice }: BillingPort
                   <X className="h-5 w-5" />
                 </button>
                 <div className="space-y-1">
-                  <span className="text-xs text-indigo-300 font-semibold uppercase tracking-widest">Paiement Sécurisé LCB</span>
-                  <h3 className="text-lg font-black">{payingInvoice.title}</h3>
-                  <div className="font-mono text-xl text-yellow-300 font-bold">{payingInvoice.amount.toFixed(2)} €</div>
+                  <span className="text-[10px] text-indigo-300 font-black uppercase tracking-widest block">🔒 Passerelle de Paiement Sécurisée</span>
+                  <h3 className="text-base font-black">Règlement de Facture</h3>
                 </div>
               </div>
 
-              <div className="p-6 space-y-5">
-                {success ? (
-                  <motion.div
-                    initial={{ scale: 0.8 }}
-                    animate={{ scale: 1 }}
-                    className="text-center p-8 space-y-2"
-                  >
-                    <CheckCircle2 className="h-14 w-14 text-emerald-500 mx-auto animate-bounce" />
-                    <h4 className="text-base font-bold text-gray-900">Règlement Validé !</h4>
-                    <p className="text-xs text-gray-500">Un reçu fiscal vous a été envoyé par messagerie électronique.</p>
-                  </motion.div>
-                ) : (
-                  <form onSubmit={handleSimulatedPayment} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-gray-600 block">Titulaire de la carte</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="M. ou Mme Martin"
-                        value={cardholderName}
-                        onChange={(e) => setCardholderName(e.target.value)}
-                        className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500"
-                      />
-                    </div>
+              <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+                {/* Récapitulatif de paiement avant validation */}
+                <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-slate-200/40 pb-2">
+                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-indigo-700">
+                      🧾 Récapitulatif avant validation
+                    </span>
+                    <span className="text-[9px] font-mono font-bold text-slate-500 bg-slate-200/50 px-2 py-0.5 rounded-full select-all">
+                      Avis #{payingInvoice.id.substring(0, 8).toUpperCase()}
+                    </span>
+                  </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-gray-600 block">Numéro de carte bancaire</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          required
-                          maxLength={19}
-                          placeholder="4970 8593 1039 4820"
-                          value={cardNumber}
-                          onChange={(e) => {
-                            // Format card with spaces
-                            const v = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-                            const matches = v.match(/\d{4,16}/g);
-                            const match = (matches && matches[0]) || '';
-                            const parts = [];
-                            for (let i = 0, len = match.length; i < len; i += 4) {
-                              parts.push(match.substring(i, i + 4));
-                            }
-                            if (parts.length > 0) {
-                              setCardNumber(parts.join(' '));
-                            } else {
-                              setCardNumber(v);
-                            }
-                          }}
-                          className="w-full pl-10 pr-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
-                        />
-                        <CreditCard className="h-4 w-4 text-gray-400 absolute left-3.5 top-3" />
+                  <div className="space-y-2.5">
+                    {/* Nom de l'élève */}
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Nom de l'élève</span>
+                      <div className="flex items-center gap-2.5 mt-1">
+                        <div className="h-6 w-6 rounded-lg bg-indigo-100 text-indigo-700 font-bold text-xxs flex items-center justify-center shrink-0 uppercase">
+                          {studentName.substring(0, 2)}
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-slate-800 leading-tight">{studentName}</p>
+                          {studentInfo && <p className="text-[9.5px] text-indigo-600 font-semibold">{studentInfo}</p>}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-600 block">Date d'expiration</label>
-                        <input
-                          type="text"
-                          required
-                          maxLength={5}
-                          placeholder="MM/AA"
-                          value={expiry}
-                          onChange={(e) => {
-                            let v = e.target.value.replace(/[^0-9]/gi, '');
-                            if (v.length > 2) {
-                              v = `${v.slice(0, 2)}/${v.slice(2, 4)}`;
-                            }
-                            setExpiry(v);
-                          }}
-                          className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
-                        />
-                      </div>
+                    {/* Objet de la facture */}
+                    <div className="pt-2 border-t border-slate-100">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Objet de la facture</span>
+                      <p className="text-xs font-bold text-slate-800 mt-1 leading-snug">{payingInvoice.title}</p>
+                    </div>
 
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-600 block">CVV / CVC</label>
-                        <input
-                          type="password"
-                          required
-                          maxLength={3}
-                          placeholder="853"
-                          value={cvv}
-                          onChange={(e) => setCvv(e.target.value.replace(/[^0-9]/gi, ''))}
-                          className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 font-mono"
-                        />
+                    {/* Montant TTC */}
+                    <div className="pt-2 border-t border-slate-150 flex items-center justify-between bg-indigo-50/50 p-2.5 rounded-xl">
+                      <div>
+                        <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider block">Montant Total TTC</span>
+                        <p className="text-[8px] text-slate-400 font-medium">Équivalence fixe BEAC : 1 € = 655,957 FCFA</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-slate-500 font-mono leading-none">
+                          {formatted.euro}
+                        </p>
+                        <p className="text-xs font-black text-indigo-700 font-mono mt-0.5">
+                          {formatted.fcfa}
+                        </p>
                       </div>
                     </div>
+                  </div>
+                </div>
 
-                    <div className="pt-2">
-                      <button
-                        type="submit"
-                        disabled={processing}
-                        className="w-full py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 disabled:opacity-50 transition flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        {processing ? (
-                          <>
-                            <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Traitement bancaire de l'opération...
-                          </>
-                        ) : (
-                          <>
-                            <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                            Confirmer le Règlement de {payingInvoice.amount.toFixed(2)} €
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="text-center font-mono text-[10px] text-gray-400 flex items-center justify-center gap-1">
-                      <ShieldCheck className="h-3 w-3 text-emerald-500" /> Standard Chiffrement Fort SSL 256 bits garanti
-                    </div>
-                  </form>
-                )}
+                <PaymentMethodSelector
+                  invoice={payingInvoice}
+                  parentPhone={parentPhone}
+                  onPaymentSuccess={(updated) => {
+                    onUpdateInvoice(updated);
+                    // Hide modal after display success
+                    setTimeout(() => {
+                      setPayingInvoice(null);
+                    }, 1500);
+                  }}
+                  onCancel={() => setPayingInvoice(null)}
+                />
               </div>
             </motion.div>
           </div>

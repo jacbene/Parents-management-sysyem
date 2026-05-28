@@ -18,6 +18,7 @@ export interface Establishment {
   pedManagerPassword?: string;
   schoolYear: string;
   ownerId: string;
+  logoUrl?: string;
 }
 
 interface PortalOnboardingProps {
@@ -32,6 +33,13 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
   const [activeTab, setActiveTab] = useState<'choose' | 'create'>('choose');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Connection Role (Parent vs Administrator)
+  const [onboardingRole, setOnboardingRole] = useState<'parent' | 'manager'>('parent');
+  const [managerPassword, setManagerPassword] = useState('');
+
+  // Custom Logo Upload state
+  const [schoolLogo, setSchoolLogo] = useState<string>('');
 
   // Parent Login Form State
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
@@ -76,6 +84,10 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
           financialGoal: 5000000,
           finManagerName: 'Marie Béné',
           finManagerPhone: '677002233',
+          finManagerPassword: '1234',
+          pedManagerName: 'Marie Béné',
+          pedManagerPhone: '677002233',
+          pedManagerPassword: '1234',
           schoolYear: '2025/2026',
           ownerId: 'demo_admin'
         },
@@ -86,6 +98,10 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
           financialGoal: 12000000,
           finManagerName: 'Abbé Ondoa',
           finManagerPhone: '699445522',
+          finManagerPassword: '1234',
+          pedManagerName: 'Abbé Ondoa',
+          pedManagerPhone: '699445522',
+          pedManagerPassword: '1234',
           schoolYear: '2025/2026',
           ownerId: 'demo_admin'
         },
@@ -96,6 +112,10 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
           financialGoal: 8000000,
           finManagerName: 'M. Tchana',
           finManagerPhone: '655112233',
+          finManagerPassword: '1234',
+          pedManagerName: 'M. Tchana',
+          pedManagerPhone: '655112233',
+          pedManagerPassword: '1234',
           schoolYear: '2025/2026',
           ownerId: 'demo_admin'
         }
@@ -124,6 +144,10 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
           financialGoal: 5000000,
           finManagerName: 'Marie Béné',
           finManagerPhone: '677002233',
+          finManagerPassword: '1234',
+          pedManagerName: 'Marie Béné',
+          pedManagerPhone: '677002233',
+          pedManagerPassword: '1234',
           schoolYear: '2025/2026',
           ownerId: 'demo_admin'
         }
@@ -140,13 +164,14 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
   // Quick preset loader helper
   const handleQuickPreset = (option: 'demo_school_ekali' | 'custom') => {
     if (option === 'demo_school_ekali') {
+      setOnboardingRole('parent');
       setSelectedSchoolId('demo_school_ekali');
       setParentName('Martin');
       setParentPhone('677112233');
     }
   };
 
-  // Perform Parent Verification logic
+  // Perform Parent or Manager Verification logic
   const handleParentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -156,6 +181,49 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
       setErrorMessage("Veuillez sélectionner un établissement scolaire dans la liste.");
       return;
     }
+
+    if (onboardingRole === 'manager') {
+      if (!managerPassword.trim()) {
+        setErrorMessage("Veuillez saisir le code secret d'accès d'administrateur.");
+        return;
+      }
+
+      setVerifyingParent(true);
+      try {
+        let currentUid = currentUserUid;
+        if (!currentUid) {
+          currentUid = await onAutoLoginGuest();
+        }
+
+        const schoolObj = schools.find(s => s.id === selectedSchoolId);
+        if (!schoolObj) {
+          setErrorMessage("Établissement non trouvé.");
+          setVerifyingParent(false);
+          return;
+        }
+
+        const expectedPassword = schoolObj.finManagerPassword || "1234";
+        if (managerPassword !== expectedPassword) {
+          setErrorMessage("🔴 Code secret d'administration incorrect pour cet établissement.");
+          setVerifyingParent(false);
+          return;
+        }
+
+        setSuccessMessage(` ✅ Accès Administrateur validé pour "${schoolObj.name}" ! Redirection...`);
+        
+        setTimeout(() => {
+          onSelectSchool(selectedSchoolId, 'manager');
+        }, 1200);
+
+      } catch (err) {
+        console.error(err);
+        setErrorMessage("Une erreur est survenue lors de la connexion administrative.");
+      } finally {
+        setVerifyingParent(false);
+      }
+      return;
+    }
+
     if (!parentName.trim() || !parentPhone.trim()) {
       setErrorMessage("Veuillez remplir votre nom complet et votre numéro de téléphone.");
       return;
@@ -178,6 +246,24 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
       let matchedInvoice: any = null;
       let invoicesFoundCount = 0;
 
+      // Helper to strip diacritics/accents and convert to lowercase
+      const normalizeTextForLogin = (str: string) => {
+        return str
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '') // remove accents
+          .toLowerCase()
+          .trim();
+      };
+
+      // Helper to extract the last 9 digits of a phone number to reconcile country-code vs regional format differences
+      const sanitizePhoneForLogin = (phoneStr: string) => {
+        const digits = phoneStr.replace(/\D/g, ''); // keep only numerical digits
+        return digits.length >= 9 ? digits.slice(-9) : digits;
+      };
+
+      const searchNameNorm = normalizeTextForLogin(parentName);
+      const searchPhoneSan = sanitizePhoneForLogin(parentPhone);
+
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         // Match conditions: 
@@ -185,15 +271,13 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
         // 2. studentId equals 'apee_ces_ekali_1' (meaning Apee parent item)
         if (data.parentId === selectedSchoolId && data.studentId === 'apee_ces_ekali_1') {
           invoicesFoundCount++;
-          const candidateTitle = (data.title || '').toLowerCase().trim();
-          const candidatePhone = (data.phone || '').trim();
           
-          const searchName = parentName.toLowerCase().trim();
-          const searchPhone = parentPhone.trim();
+          const candidateTitleNorm = normalizeTextForLogin(data.title || '');
+          const candidatePhoneSan = sanitizePhoneForLogin(data.phone || '');
 
-          // Match by name containing searchName or phone matches exact
-          const nameMatches = candidateTitle.includes(searchName) || searchName.includes(candidateTitle);
-          const phoneMatches = candidatePhone === searchPhone || candidatePhone.replace(/\s+/g, '') === searchPhone.replace(/\s+/g, '');
+          // Match by name containing searchName or phone matches exact last 9 digits
+          const nameMatches = searchNameNorm.length >= 3 && (candidateTitleNorm.includes(searchNameNorm) || searchNameNorm.includes(candidateTitleNorm));
+          const phoneMatches = searchPhoneSan.length >= 8 && candidatePhoneSan === searchPhoneSan;
 
           if (nameMatches || phoneMatches) {
             matchedInvoice = data;
@@ -203,10 +287,7 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
 
       // If we are looking at the pre-seeded "Ekali" school, and the database doesn't have it, let's create a beautiful client-side fallback/automatic verify!
       if (!matchedInvoice && selectedSchoolId === 'demo_school_ekali') {
-        const searchName = parentName.toLowerCase().trim();
-        const searchPhone = parentPhone.trim();
-
-        if (searchName.includes('martin') || searchPhone.includes('677112233')) {
+        if (searchNameNorm.includes('martin') || searchPhoneSan.includes('677112233') || searchPhoneSan.endsWith('112233')) {
           matchedInvoice = {
             id: 'inv_martin',
             title: 'Jean Martin',
@@ -215,7 +296,7 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
             amountPaid: 15000, // Versé 15,000 FCFA (acompte > 0)
             studentsList: JSON.stringify([{ name: 'Lucas Martin', classRoom: 'CM2-A' }, { name: 'Chloé Martin', classRoom: 'CE2-B' }])
           };
-        } else if (searchName.includes('diallo') || searchPhone.includes('699445566')) {
+        } else if (searchNameNorm.includes('diallo') || searchPhoneSan.includes('699445566') || searchPhoneSan.endsWith('445566')) {
           matchedInvoice = {
             id: 'inv_diallo',
             title: 'Mariam Diallo',
@@ -314,7 +395,8 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
         pedManagerPhone: pedPhone.trim() || '',
         pedManagerPassword: pedPassword.trim() || '1234',
         schoolYear,
-        ownerId: currentUid
+        ownerId: currentUid,
+        logoUrl: schoolLogo
       };
 
       const batch = writeBatch(db);
@@ -347,6 +429,7 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
         pedManagerName: pedName.trim() || 'Principal Responsable Pédagogique',
         pedManagerPhone: pedPhone.trim() || '',
         pedManagerPassword: pedPassword.trim() || '1234',
+        logoUrl: schoolLogo
       });
 
       // 4. Seed standard students for this specific school
@@ -575,20 +658,46 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
         {/* Core Screen Panels Custom layout based on active tab selection */}
         <div className="md:col-span-2 bg-white border border-slate-150 p-6 rounded-3xl shadow-sm">
           {activeTab === 'choose' ? (
-            <form onSubmit={handleParentSubmit} className="space-y-6">
+            <form onSubmit={handleParentSubmit} className="space-y-5">
               <div className="border-b border-gray-100 pb-3">
                 <h2 className="text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                  🔐 Connexion Espace Parents d'Élèves
+                  🔐 Connexion Portail Scolaire
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Les parents d'élèves autorisés doivent justifier d'un paiement d'acompte de la cotisation APEE de l'année scolaire en cours.
+                  Connectez-vous au portail en fonction de votre profil d'habilitation (Parent ou Gérant d'école).
                 </p>
+              </div>
+
+              {/* Role Toggle Choice */}
+              <div className="flex gap-2 p-1 bg-slate-100 rounded-xl w-full border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => { setOnboardingRole('parent'); setErrorMessage(null); }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    onboardingRole === 'parent'
+                      ? 'bg-white text-indigo-700 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  👤 Parent d'Élève
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setOnboardingRole('manager'); setErrorMessage(null); }}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    onboardingRole === 'manager'
+                      ? 'bg-white text-indigo-700 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  💼 Administrateur d'Établissement
+                </button>
               </div>
 
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                    Établissement Scolaire à visiter <span className="text-red-500">*</span>
+                    Établissement Scolaire de référence <span className="text-red-500">*</span>
                   </label>
                   {loadingSchools ? (
                     <div className="py-2.5 px-3 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-500">
@@ -611,41 +720,63 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
-                      Nom complet du parent <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        required
-                        value={parentName}
-                        onChange={(e) => setParentName(e.target.value)}
-                        placeholder="Ex: Martin"
-                        className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-indigo-500 focus:bg-white"
-                      />
-                      <User className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
+                {onboardingRole === 'parent' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
+                        Nom complet du parent <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required={onboardingRole === 'parent'}
+                          value={parentName}
+                          onChange={(e) => setParentName(e.target.value)}
+                          placeholder="Ex: Martin"
+                          className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-indigo-500 focus:bg-white"
+                        />
+                        <User className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
+                      </div>
                     </div>
-                  </div>
 
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
+                        Numéro de téléphone <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="tel"
+                          required={onboardingRole === 'parent'}
+                          value={parentPhone}
+                          onChange={(e) => setParentPhone(e.target.value)}
+                          placeholder="Ex: 677112233"
+                          className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-indigo-500 focus:bg-white"
+                        />
+                        <Phone className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
-                      Numéro de téléphone <span className="text-red-500">*</span>
+                      Code secret d'accès Administrateur <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <input
-                        type="tel"
-                        required
-                        value={parentPhone}
-                        onChange={(e) => setParentPhone(e.target.value)}
-                        placeholder="Ex: 677112233"
-                        className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-indigo-500 focus:bg-white"
+                        type="password"
+                        required={onboardingRole === 'manager'}
+                        value={managerPassword}
+                        onChange={(e) => setManagerPassword(e.target.value)}
+                        placeholder="Ex: 1234"
+                        className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono tracking-widest focus:outline-indigo-500 focus:bg-white"
                       />
-                      <Phone className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
+                      <ShieldCheck className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
                     </div>
+                    <p className="text-[10px] text-gray-500 leading-normal p-2.5 bg-amber-50 rounded-xl border border-amber-200/80 flex items-center gap-1.5 shadow-3xs">
+                      ✨ Pour les écoles de démonstration par défaut, le code d'accès administrateur est <strong>1234</strong>.
+                    </p>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="pt-2">
@@ -657,11 +788,11 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
                   {verifyingParent ? (
                     <>
                       <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Vérification comptable en cours...
+                      Connexion en cours...
                     </>
                   ) : (
                     <>
-                      Vérifier versement APEE & Entrer <ArrowRight className="h-4 w-4" />
+                      {onboardingRole === 'parent' ? "Vérifier versement APEE & Entrer" : "S'identifier comme Administrateur"} <ArrowRight className="h-4 w-4" />
                     </>
                   )}
                 </button>
@@ -679,6 +810,115 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
               </div>
 
               <div className="space-y-5">
+                {/* LOGO DE L'ÉTABLISSEMENT */}
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">
+                      Logo Officiel de l'Établissement
+                    </label>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md">Optionnel</span>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4 items-center">
+                    {/* Visual Preview */}
+                    <div className="h-20 w-20 bg-white border-2 border-dashed border-slate-250 rounded-2xl flex items-center justify-center overflow-hidden shrink-0 relative shadow-3xs">
+                      {schoolLogo ? (
+                        <>
+                          <img src={schoolLogo} alt="Logo" className="h-full w-full object-contain p-1" referrerPolicy="no-referrer" />
+                          <button
+                            type="button"
+                            onClick={() => setSchoolLogo('')}
+                            className="absolute -top-1 -right-1 p-1 bg-red-100 hover:bg-red-200 text-red-600 rounded-full cursor-pointer shadow-xs transition"
+                            title="Supprimer le logo"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="text-center p-2 text-slate-400">
+                          <Plus className="h-5 w-5 mx-auto opacity-70" />
+                          <span className="text-[8px] font-black uppercase">Aucun</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Interactive drag-and-drop & preset picker */}
+                    <div className="flex-1 space-y-2.5 w-full">
+                      <div className="relative border border-slate-200 bg-white hover:bg-slate-50 transition rounded-xl p-2.5 text-center cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.size > 1 * 1024 * 1024) {
+                                alert("🔴 L'image choisie est trop volumineuse (Veuillez choisir une image de moins de 1 Mo).");
+                                return;
+                              }
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                setSchoolLogo(reader.result as string);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        <div className="text-xs text-slate-600 font-semibold">
+                          📁 Télécharger une image locale...
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Fichiers PNG, JPG ou SVG de moins de 1 Mo</p>
+                      </div>
+
+                      {/* Quick Choice preset school badges */}
+                      <div className="space-y-1">
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">
+                          Ou générer un écusson de démonstration :
+                        </span>
+                        <div className="flex gap-2">
+                          {[
+                            { emoji: '🏫', name: 'Établissement' },
+                            { emoji: '🎓', name: 'Alumni' },
+                            { emoji: '🏛️', name: 'Académie' },
+                            { emoji: '📚', name: 'Lettres' },
+                            { emoji: '🛡️', name: 'Crest' },
+                            { emoji: '🏆', name: 'Excellence' }
+                          ].map((pest) => (
+                            <button
+                              key={pest.emoji}
+                              type="button"
+                              onClick={() => {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = 120;
+                                canvas.height = 120;
+                                const ctx = canvas.getContext('2d');
+                                if (ctx) {
+                                  ctx.fillStyle = '#f5f3ff';
+                                  ctx.beginPath();
+                                  ctx.arc(60, 60, 56, 0, 2 * Math.PI);
+                                  ctx.fill();
+                                  ctx.strokeStyle = '#4f46e5';
+                                  ctx.lineWidth = 4;
+                                  ctx.stroke();
+                                  ctx.font = '54px Arial';
+                                  ctx.textAlign = 'center';
+                                  ctx.textBaseline = 'middle';
+                                  ctx.fillText(pest.emoji, 60, 62);
+                                  setSchoolLogo(canvas.toDataURL('image/png'));
+                                }
+                              }}
+                              className="px-2 py-1.5 bg-white border border-slate-250 rounded-lg hover:border-indigo-400 hover:bg-slate-50 transition text-sm cursor-pointer shadow-4xs"
+                              title={pest.name}
+                            >
+                              {pest.emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* School main inputs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
@@ -874,8 +1114,9 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
                 </div>
               </div>
 
-              <div className="p-3 bg-white border border-red-150 rounded-2xl space-y-1.5 hover:border-red-300 transition shadow-3xs"
+              <div className="p-3 bg-white border border-red-150 rounded-2xl space-y-1.5 hover:border-red-300 transition shadow-3xs cursor-pointer"
                    onClick={() => {
+                     setOnboardingRole('parent');
                      setSelectedSchoolId('demo_school_ekali');
                      setParentName('Diallo');
                      setParentPhone('699445566');
@@ -893,6 +1134,26 @@ export default function PortalOnboarding({ onSelectSchool, currentUserUid, onAut
                   <div>👤 Nom : <span className="font-extrabold text-slate-800 select-all">Diallo</span></div>
                   <div>📞 Tél : <span className="font-extrabold text-slate-800 select-all">699445566</span></div>
                   <div className="text-[9.5px] mt-1 text-slate-400">Total Versé : 0 FCFA (Retard)</div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-white border border-indigo-150 rounded-2xl space-y-1.5 hover:border-indigo-300 transition shadow-3xs cursor-pointer"
+                   onClick={() => {
+                     setOnboardingRole('manager');
+                     setSelectedSchoolId('demo_school_ekali');
+                     setManagerPassword('1234');
+                   }}>
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-indigo-800 text-[10px] uppercase bg-indigo-50 px-2 py-0.5 rounded-md">
+                    ⚙️ Accès Administrateur / Gérant
+                  </span>
+                  <span className="text-[10px] text-indigo-600 font-bold underline">Appliquer</span>
+                </div>
+                <p className="font-medium text-slate-800 leading-tight">
+                  Accédez aux configurations / paramètres, bilans et gestion complète de l'école.
+                </p>
+                <div className="text-[10.5px] font-mono text-slate-500 bg-slate-50/50 p-1.5 rounded-lg border border-slate-100">
+                  <div>🔑 Code secret : <span className="font-extrabold text-slate-800 select-all">1234</span></div>
                 </div>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -151,29 +151,55 @@ export default function App() {
   const [activeParentToEdit, setActiveParentToEdit] = useState<ApeeParent | null>(null);
 
   const [isApeeAuthorized, setIsApeeAuthorized] = useState(false);
+  const [isPedAuthorized, setIsPedAuthorized] = useState(false);
 
-  const checkApeeAuthorization = (): boolean => {
+  // Custom dialog to replace native modal prompts (blocked in sandbox iframes)
+  const [authDialog, setAuthDialog] = useState<{
+    isOpen: boolean;
+    type: 'finance' | 'pedagogic';
+    title: string;
+    description: string;
+    placeholder: string;
+    expectedValue: string;
+    managerName: string;
+    resolve: (value: boolean) => void;
+  } | null>(null);
+
+  const [authPasswordInput, setAuthPasswordInput] = useState('');
+  const [authDialogError, setAuthDialogError] = useState('');
+
+  const checkApeeAuthorization = (): Promise<boolean> => {
     if (portalUserRole === 'parent') {
       alert("Accès refusé: Votre profil Parent ne vous autorise pas à modifier les données financières administratives.");
-      return false;
+      return Promise.resolve(false);
     }
     if (!apeeSettings.finManagerPassword) {
-      return true; // No password configured, actions are free
+      return Promise.resolve(true); // No password configured, actions are free
     }
     if (isApeeAuthorized) {
-      return true; // Already unlocked for this session
+      return Promise.resolve(true); // Already unlocked for this session
     }
     
-    // Prompt for password
-    const password = prompt(`Action sécurisée par le Responsable Financier. Saisissez le mot de passe d'accès pour continuer :`);
-    if (password === null) return false;
-    if (password === apeeSettings.finManagerPassword) {
-      setIsApeeAuthorized(true);
-      return true;
-    } else {
-      alert("Mot de passe incorrect. Action d'écriture annulée.");
-      return false;
-    }
+    // Open the custom dialog
+    return new Promise<boolean>((resolve) => {
+      setAuthPasswordInput('');
+      setAuthDialogError('');
+      setAuthDialog({
+        isOpen: true,
+        type: 'finance',
+        title: '🔓 Déverrouillage Responsable Financier',
+        description: `Cette action requiert le mot de passe du Responsable Financier (${apeeSettings.finManagerName || "Gérant Financier"}) pour continuer :`,
+        placeholder: 'Saisissez le mot de passe...',
+        expectedValue: apeeSettings.finManagerPassword,
+        managerName: apeeSettings.finManagerName || "Gérant Financier",
+        resolve: (approved) => {
+          if (approved) {
+            setIsApeeAuthorized(true);
+          }
+          resolve(approved);
+        }
+      });
+    });
   };
 
   const handlePromptUnlockApee = () => {
@@ -181,39 +207,56 @@ export default function App() {
       setIsApeeAuthorized(true);
       return;
     }
-    const password = prompt(`Entrez le mot de passe du Responsable Financier (${apeeSettings.finManagerName || "Gérant"}) :`);
-    if (password === null) return;
-    if (password === apeeSettings.finManagerPassword) {
-      setIsApeeAuthorized(true);
-    } else {
-      alert("Mot de passe incorrect.");
-    }
+    setAuthPasswordInput('');
+    setAuthDialogError('');
+    setAuthDialog({
+      isOpen: true,
+      type: 'finance',
+      title: '🔓 Déverrouillage Responsable Financier',
+      description: `Entrez le mot de passe du Responsable Financier (${apeeSettings.finManagerName || "Gérant"}) :`,
+      placeholder: 'Mot de passe...',
+      expectedValue: apeeSettings.finManagerPassword,
+      managerName: apeeSettings.finManagerName || "Gérant Financier",
+      resolve: (approved) => {
+        if (approved) {
+          setIsApeeAuthorized(true);
+        }
+      }
+    });
   };
 
-  const [isPedAuthorized, setIsPedAuthorized] = useState(false);
-
-  const checkPedAuthorization = (): boolean => {
+  const checkPedAuthorization = (): Promise<boolean> => {
     if (portalUserRole === 'parent') {
       alert("Accès refusé: Votre profil Parent ne vous autorise pas à modifier les données administratives et académiques.");
-      return false;
+      return Promise.resolve(false);
     }
     if (!apeeSettings.pedManagerPassword) {
-      return true; // No password configured, actions are free
+      return Promise.resolve(true); // No password configured, actions are free
     }
     if (isPedAuthorized) {
-      return true; // Already unlocked for this session
+      return Promise.resolve(true); // Already unlocked for this session
     }
     
-    // Prompt for password
-    const password = prompt(`Action sécurisée par le Responsable Pédagogique (${apeeSettings.pedManagerName || "Surveillant/Censeur"}). Saisissez le mot de passe pour continuer :`);
-    if (password === null) return false;
-    if (password === apeeSettings.pedManagerPassword) {
-      setIsPedAuthorized(true);
-      return true;
-    } else {
-      alert("Mot de passe incorrect. Action d'écriture annulée.");
-      return false;
-    }
+    // Open the custom dialog
+    return new Promise<boolean>((resolve) => {
+      setAuthPasswordInput('');
+      setAuthDialogError('');
+      setAuthDialog({
+        isOpen: true,
+        type: 'pedagogic',
+        title: '🔓 Déverrouillage Responsable Académique',
+        description: `Cette action requiert le mot de passe d'accès du Responsable Académique (${apeeSettings.pedManagerName || "Surveillant/Censeur"}) :`,
+        placeholder: 'Saisissez le mot de passe...',
+        expectedValue: apeeSettings.pedManagerPassword,
+        managerName: apeeSettings.pedManagerName || "Surveillant Général / Censeur",
+        resolve: (approved) => {
+          if (approved) {
+            setIsPedAuthorized(true);
+          }
+          resolve(approved);
+        }
+      });
+    });
   };
 
   const handlePromptUnlockPed = () => {
@@ -221,13 +264,44 @@ export default function App() {
       setIsPedAuthorized(true);
       return;
     }
-    const password = prompt(`Entrez le mot de passe du Responsable Pédagogique (${apeeSettings.pedManagerName || "Surveillant/Censeur"}) :`);
-    if (password === null) return;
-    if (password === apeeSettings.pedManagerPassword) {
-      setIsPedAuthorized(true);
+    setAuthPasswordInput('');
+    setAuthDialogError('');
+    setAuthDialog({
+      isOpen: true,
+      type: 'pedagogic',
+      title: '🔓 Déverrouillage Responsable Académique',
+      description: `Entrez le mot de passe du Responsable Académique (${apeeSettings.pedManagerName || "Surveillant/Censeur"}) :`,
+      placeholder: 'Mot de passe...',
+      expectedValue: apeeSettings.pedManagerPassword,
+      managerName: apeeSettings.pedManagerName || "Surveillant/Censeur",
+      resolve: (approved) => {
+        if (approved) {
+          setIsPedAuthorized(true);
+        }
+      }
+    });
+  };
+
+  const handleAuthDialogSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authDialog) return;
+    
+    if (authPasswordInput === authDialog.expectedValue) {
+      authDialog.resolve(true);
+      setAuthPasswordInput('');
+      setAuthDialogError('');
+      setAuthDialog(null);
     } else {
-      alert("Mot de passe incorrect.");
+      setAuthDialogError('Mot de passe incorrect. Veuillez réessayer.');
     }
+  };
+
+  const handleAuthDialogCancel = () => {
+    if (!authDialog) return;
+    authDialog.resolve(false);
+    setAuthPasswordInput('');
+    setAuthDialogError('');
+    setAuthDialog(null);
   };
 
   // Firestore App State
@@ -244,10 +318,33 @@ export default function App() {
 
   // Filter students based on Parent authorized subset for Visitor role
   const filteredStudents = students.filter(s => {
-    if (portalUserRole === 'parent' && portalParentDetails?.studentSubsetNames) {
-      const allowedNames = portalParentDetails.studentSubsetNames.map(name => name.toLowerCase().trim());
-      return allowedNames.includes(s.name.toLowerCase().trim()) || 
-             allowedNames.some(allowed => s.name.toLowerCase().trim().includes(allowed) || allowed.includes(s.name.toLowerCase().trim()));
+    if (portalUserRole === 'parent') {
+      let allowedNames: string[] = [];
+      if (portalParentDetails?.studentSubsetNames && portalParentDetails.studentSubsetNames.length > 0) {
+        allowedNames = portalParentDetails.studentSubsetNames.map(name => name.toLowerCase().trim());
+      } else {
+        // Safe Fallbacks for demo presets
+        const parentNameLower = (portalParentDetails?.name || '').toLowerCase();
+        const parentPhoneClean = (portalParentDetails?.phone || '').replace(/\D/g, '');
+        if (parentNameLower.includes('martin') || parentPhoneClean.includes('677112233')) {
+          allowedNames = ['lucas martin', 'chloe martin', 'chloé martin'];
+        } else if (parentNameLower.includes('diallo') || parentPhoneClean.includes('699445566')) {
+          allowedNames = ['amadou diallo'];
+        } else {
+          // If still no matches, we search if the student's name shares any common words with the parent's name (like last name)
+          const parentWords = parentNameLower.split(/\s+/).filter(w => w.length > 2);
+          const studentNameLower = s.name.toLowerCase();
+          const hasCommonWord = parentWords.some(word => studentNameLower.includes(word));
+          if (hasCommonWord) return true;
+          
+          // Absolute fallback: if still empty list, allow all students in this custom space so they are never locked out
+          return true;
+        }
+      }
+      
+      const sNameLower = s.name.toLowerCase().trim();
+      return allowedNames.includes(sNameLower) || 
+             allowedNames.some(allowed => sNameLower.includes(allowed) || allowed.includes(sNameLower));
     }
     return true;
   });
@@ -268,8 +365,8 @@ export default function App() {
   // 2. Fetch and seed database state based on Selected School or logged-in account (Unified ID space)
   const userId = selectedSchoolId || user?.uid;
   useEffect(() => {
-    if (!userId) {
-      // Clear local states on sign out
+    if (!userId || !user) {
+      // Clear local states on sign out or when no user is signed in
       setStudents([]);
       setSelectedStudentId('');
       setGrades([]);
@@ -291,15 +388,12 @@ export default function App() {
     const initAndFetchData = async () => {
       setDataLoading(true);
       try {
-        // A. Verify if database has seeded profiles for this account space (demo schools pre-seeded dynamically)
-        const isDemoSchool = userId.startsWith('demo_school_');
-        if (!isDemoSchool) {
-          const seeded = await isDatabaseSeeded(userId);
-          if (!seeded) {
-            setSeeding(true);
-            await seedUserData(userId);
-            setSeeding(false);
-          }
+        // A. Verify if database has seeded profiles for this account space (demo schools pre-seeded dynamically if empty)
+        const seeded = await isDatabaseSeeded(userId);
+        if (!seeded) {
+          setSeeding(true);
+          await seedUserData(userId);
+          setSeeding(false);
         }
 
         // B. Fetch all related collections under parentId
@@ -318,7 +412,7 @@ export default function App() {
     };
 
     initAndFetchData();
-  }, [userId]);
+  }, [userId, user?.uid]);
 
   const fetchAllData = async (uid: string) => {
     try {
@@ -404,13 +498,28 @@ export default function App() {
     setMessages(prev => [...prev, newMsg]);
   };
 
+  const handleUpdateStudent = async (updated: Student) => {
+    setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
+    if (userId) {
+      try {
+        await setDoc(doc(db, 'students', updated.id), updated);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `students/${updated.id}`);
+      }
+    }
+    return true;
+  };
+
   const handleUpdateStudentInPlace = (updated: Student) => {
     setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
   };
 
   // Pedagogical & Academic Action Handlers (strictly authorized under checkPedAuthorization)
   const handleAddGrade = async (grade: Grade) => {
-    if (!checkPedAuthorization()) return false;
+    if (portalUserRole === 'parent') {
+      alert("Accès refusé: Les parents ne sont pas autorisés à modifier les relevés de notes.");
+      return false;
+    }
     setGrades(prev => [grade, ...prev]);
     if (userId) {
       try {
@@ -423,7 +532,10 @@ export default function App() {
   };
 
   const handleDeleteGrade = async (id: string) => {
-    if (!checkPedAuthorization()) return false;
+    if (portalUserRole === 'parent') {
+      alert("Accès refusé: Les parents ne sont pas autorisés à supprimer les relevés de notes.");
+      return false;
+    }
     setGrades(prev => prev.filter(g => g.id !== id));
     if (userId) {
       try {
@@ -436,7 +548,7 @@ export default function App() {
   };
 
   const handleAddHomework = async (homework: Homework) => {
-    if (!checkPedAuthorization()) return false;
+    if (!await checkPedAuthorization()) return false;
     setHomeworks(prev => [homework, ...prev]);
     if (userId) {
       try {
@@ -449,7 +561,7 @@ export default function App() {
   };
 
   const handleDeleteHomework = async (id: string) => {
-    if (!checkPedAuthorization()) return false;
+    if (!await checkPedAuthorization()) return false;
     setHomeworks(prev => prev.filter(hw => hw.id !== id));
     if (userId) {
       try {
@@ -462,7 +574,7 @@ export default function App() {
   };
 
   const handleAddAttendance = async (log: Attendance) => {
-    if (!checkPedAuthorization()) return false;
+    if (!await checkPedAuthorization()) return false;
     setAttendanceLogs(prev => [log, ...prev]);
     if (userId) {
       try {
@@ -475,7 +587,7 @@ export default function App() {
   };
 
   const handleDeleteAttendance = async (id: string) => {
-    if (!checkPedAuthorization()) return false;
+    if (!await checkPedAuthorization()) return false;
     setAttendanceLogs(prev => prev.filter(a => a.id !== id));
     if (userId) {
       try {
@@ -488,7 +600,7 @@ export default function App() {
   };
 
   const handleAddAnnouncement = async (ann: Announcement) => {
-    if (!checkPedAuthorization()) return false;
+    if (!await checkPedAuthorization()) return false;
     setAnnouncements(prev => [ann, ...prev]);
     if (userId) {
       try {
@@ -504,7 +616,7 @@ export default function App() {
   };
 
   const handleDeleteAnnouncement = async (id: string) => {
-    if (!checkPedAuthorization()) return false;
+    if (!await checkPedAuthorization()) return false;
     setAnnouncements(prev => prev.filter(a => a.id !== id));
     if (userId) {
       try {
@@ -518,16 +630,15 @@ export default function App() {
 
   // APEE State Action Handlers
   const handleSaveApeeSettings = async (newSettings: ApeeSettings) => {
-    if (!checkApeeAuthorization()) return;
+    if (!await checkApeeAuthorization()) return;
     setApeeSettings(newSettings);
     if (userId) {
       await saveApeeSettings(userId, newSettings);
     }
   };
 
-  const handleSaveApeeParentInPlace = async (parent: ApeeParent) => {
-    if (!checkApeeAuthorization()) return;
-    setActiveParentToEdit(null);
+  const handleSaveApeeParentInPlace = async (parent: ApeeParent): Promise<boolean> => {
+    if (!await checkApeeAuthorization()) return false;
     setApeeParents(prev => {
       const idx = prev.findIndex(p => p.id === parent.id);
       if (idx !== -1) {
@@ -536,12 +647,18 @@ export default function App() {
       return [...prev, parent];
     });
     if (userId) {
-      await saveApeeParent(userId, parent);
+      try {
+        await saveApeeParent(userId, parent);
+      } catch (err) {
+        console.error("Failed to save APEE parent:", err);
+        return false;
+      }
     }
+    return true;
   };
 
   const handleDeleteApeeParentInPlace = async (id: string) => {
-    if (!checkApeeAuthorization()) return;
+    if (!await checkApeeAuthorization()) return;
     if (activeParentToEdit?.id === id) {
       setActiveParentToEdit(null);
     }
@@ -552,7 +669,7 @@ export default function App() {
   };
 
   const handleSaveApeeExpenseInPlace = async (expense: ApeeExpense) => {
-    if (!checkApeeAuthorization()) return;
+    if (!await checkApeeAuthorization()) return;
     setApeeExpenses(prev => {
       const idx = prev.findIndex(e => e.id === expense.id);
       if (idx !== -1) {
@@ -566,7 +683,7 @@ export default function App() {
   };
 
   const handleDeleteApeeExpenseInPlace = async (id: string) => {
-    if (!checkApeeAuthorization()) return;
+    if (!await checkApeeAuthorization()) return;
     setApeeExpenses(prev => prev.filter(e => e.id !== id));
     if (userId) {
       await deleteApeeExpense(userId, id);
@@ -574,7 +691,7 @@ export default function App() {
   };
 
   const handleImportApeeBackup = async (data: { parents?: ApeeParent[]; expenses?: ApeeExpense[]; settings?: ApeeSettings }) => {
-    if (!checkApeeAuthorization()) return;
+    if (!await checkApeeAuthorization()) return;
     if (data.settings) setApeeSettings(data.settings);
     if (data.parents) setApeeParents(data.parents);
     if (data.expenses) setApeeExpenses(data.expenses);
@@ -584,7 +701,7 @@ export default function App() {
   };
 
   const handleResetApeeDatabase = async () => {
-    if (!checkApeeAuthorization()) return;
+    if (!await checkApeeAuthorization()) return;
     setApeeSettings(DEFAULT_SETTINGS);
     setApeeParents([]);
     setApeeExpenses([]);
@@ -601,7 +718,16 @@ export default function App() {
 
   // Compute stats counting for unread/active notifications in side drawer
   const pendingHomeworkCount = homeworks.filter(h => h.studentId === activeStudent?.id && h.status === 'Pending').length;
-  const unpaidInvoiceCount = invoices.filter(i => i.status !== 'Paid').length;
+  const unpaidInvoiceCount = invoices.filter(i => {
+    // Skip general / administrative entries
+    if (i.studentId === 'apee_settings' || i.studentId === 'apee_expense' || i.studentId === 'apee_ces_ekali_1') {
+      return false;
+    }
+    if (portalUserRole === 'parent') {
+      return i.status !== 'Paid' && filteredStudents.some(s => s.id === i.studentId);
+    }
+    return i.status !== 'Paid';
+  }).length;
 
   // Unauthenticated screen login handlings
   const handleLogin = async () => {
@@ -779,7 +905,16 @@ export default function App() {
             {/* Top Navigation Bar */}
             <header className="bg-white border-b border-gray-150 py-3.5 px-6 sticky top-0 z-30 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="text-2xl bg-indigo-55 p-2 rounded-xl">🏫</span>
+                {apeeSettings.logoUrl ? (
+                  <img
+                    src={apeeSettings.logoUrl}
+                    alt="Logo Établissement"
+                    className="h-10 w-10 object-contain rounded-xl p-0.5 bg-slate-50 border border-slate-150 shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="text-2xl bg-indigo-55 p-2 rounded-xl shrink-0">🏫</span>
+                )}
                 <div>
                   <h1 className="text-base font-black tracking-tight text-gray-950 flex items-center gap-1">
                     Pasma-sys <span className="text-[10px] bg-slate-900 text-white font-mono px-1.5 py-0.5 rounded-full uppercase scale-90">ENT</span>
@@ -854,6 +989,7 @@ export default function App() {
                             onSelect={() => setSelectedStudentId(stu.id)}
                             onUpdateStudent={handleUpdateStudentInPlace}
                             onPrint={() => setPrintingStudent(stu)}
+                            settings={apeeSettings}
                           />
                         ))}
                       </div>
@@ -1245,6 +1381,7 @@ export default function App() {
                             setActiveTab('apee_recording');
                           }}
                           onDeleteParent={handleDeleteApeeParentInPlace}
+                          settings={apeeSettings}
                         />
                       </motion.div>
                     )}
@@ -1349,6 +1486,8 @@ export default function App() {
                           pedManagerName={apeeSettings.pedManagerName}
                           hasPedPassword={!!apeeSettings.pedManagerPassword}
                           activeStudent={activeStudent}
+                          onUpdateStudent={handleUpdateStudent}
+                          onPrintReport={() => setPrintingStudent(activeStudent)}
                         />
                       </motion.div>
                     )}
@@ -1364,13 +1503,45 @@ export default function App() {
                           pedManagerName={apeeSettings.pedManagerName}
                           hasPedPassword={!!apeeSettings.pedManagerPassword}
                           activeStudent={activeStudent}
+                          onUpdateStudent={handleUpdateStudent}
+                          onPrintReport={() => setPrintingStudent(activeStudent)}
                         />
                       </motion.div>
                     )}
 
                     {activeTab === 'billing' && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key="billing">
-                        <BillingPortal invoices={invoices} onUpdateInvoice={handleUpdateInvoiceInPlace} />
+                        <BillingPortal
+                          invoices={
+                            portalUserRole === 'parent'
+                              ? invoices.filter(inv => {
+                                  // 1. Is it a pupil invoice for one of their kids?
+                                  const isKidInvoice = filteredStudents.some(s => s.id === inv.studentId);
+                                  if (isKidInvoice) return true;
+
+                                  // 2. Is it their own APEE parent invoice?
+                                  if (inv.studentId === 'apee_ces_ekali_1') {
+                                    const parentPhoneSan = portalParentDetails?.phone?.replace(/\D/g, '').slice(-9) || '';
+                                    const invPhoneSan = inv.phone?.replace(/\D/g, '').slice(-9) || '';
+                                    const phoneMatches = parentPhoneSan && invPhoneSan && parentPhoneSan === invPhoneSan;
+
+                                    const parentNameNorm = portalParentDetails?.name?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() || '';
+                                    const invNameNorm = inv.title?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() || '';
+                                    const nameMatches = parentNameNorm && invNameNorm && (parentNameNorm.includes(invNameNorm) || invNameNorm.includes(parentNameNorm));
+
+                                    return phoneMatches || nameMatches;
+                                  }
+
+                                  return false;
+                                })
+                              : invoices
+                          }
+                          onUpdateInvoice={handleUpdateInvoiceInPlace}
+                          parentPhone={portalParentDetails?.phone}
+                          students={students}
+                          portalUserRole={portalUserRole}
+                          filteredStudents={filteredStudents}
+                        />
                       </motion.div>
                     )}
 
@@ -1471,7 +1642,68 @@ export default function App() {
           attendance={attendanceLogs.filter(a => a.studentId === printingStudent.id)}
           isOpen={!!printingStudent}
           onClose={() => setPrintingStudent(null)}
+          settings={apeeSettings}
         />
+      )}
+
+      {/* Safety Passcode Overlay Modal */}
+      {authDialog?.isOpen && (
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 z-[9999] font-sans">
+          <div className="bg-slate-900 rounded-3xl shadow-2xl border border-slate-805 w-full max-w-md overflow-hidden text-slate-100 p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-indigo-950 text-indigo-400 rounded-2xl border border-indigo-900/40">
+                <Lock className="h-6 w-6" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-sm font-black text-white tracking-tight leading-snug">{authDialog.title}</h3>
+                <p className="text-[10px] text-indigo-400 font-extrabold uppercase tracking-wider">{authDialog.managerName}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed font-semibold text-left">
+              {authDialog.description}
+            </p>
+
+            <form onSubmit={handleAuthDialogSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <input
+                  type="password"
+                  autoFocus
+                  required
+                  placeholder={authDialog.placeholder}
+                  value={authPasswordInput}
+                  onChange={(e) => {
+                    setAuthPasswordInput(e.target.value);
+                    if (authDialogError) setAuthDialogError('');
+                  }}
+                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-white placeholder-slate-600 font-mono tracking-widest text-center text-xl transition-all"
+                />
+                
+                {authDialogError && (
+                  <p className="text-[11px] text-rose-450 font-bold text-center mt-1">
+                    ⚠️ {authDialogError}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleAuthDialogCancel}
+                  className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-md"
+                >
+                  Saisir le sésame 🔓
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

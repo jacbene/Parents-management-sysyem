@@ -181,6 +181,14 @@ export async function fetchApeeData(parentId: string) {
         } catch (e) {
           console.error("Failed to parse budgetLinesList from Firestore", e);
         }
+        let teachers = [];
+        try {
+          if (data.classTeachersList) {
+            teachers = JSON.parse(data.classTeachersList);
+          }
+        } catch (e) {
+          console.error("Failed to parse classTeachersList from Firestore", e);
+        }
         dbSettings = {
           associationName: data.title,
           cotisationAmount: data.amount,
@@ -193,6 +201,15 @@ export async function fetchApeeData(parentId: string) {
           pedManagerName: data.pedManagerName || '',
           pedManagerPhone: data.pedManagerPhone || '',
           pedManagerPassword: data.pedManagerPassword || '',
+          logoUrl: data.logoUrl || '',
+          directorName: data.directorName || '',
+          directorPhone: data.directorPhone || '',
+          directorEmail: data.directorEmail || '',
+          surveillantName: data.surveillantName || '',
+          surveillantPhone: data.surveillantPhone || '',
+          censeurName: data.censeurName || '',
+          censeurPhone: data.censeurPhone || '',
+          classTeachers: teachers,
         };
       }
     });
@@ -201,6 +218,33 @@ export async function fetchApeeData(parentId: string) {
     const finalSettings = dbSettings || cachedSettings;
     const finalParents = dbParents.length > 0 ? dbParents : cachedParents;
     const finalExpenses = dbExpenses.length > 0 ? dbExpenses : cachedExpenses;
+
+    // Automatic self-healing: copy local-only parents back to Firestore
+    if (parentId && dbParents.length === 0 && cachedParents.length > 0) {
+      console.log("Rescuing local-only parents and syncing them to Firestore...");
+      cachedParents.forEach(async (cp) => {
+        try {
+          const invData = normalizeToInvoice(cp, parentId);
+          await setDoc(doc(db, 'invoices', cp.id), invData);
+        } catch (e) {
+          console.error("Auto background sync failed for parent", cp.name, e);
+        }
+      });
+    }
+
+    if (parentId && dbParents.length > 0 && cachedParents.length > dbParents.length) {
+      cachedParents.forEach(async (cp) => {
+        if (!dbParents.some(dp => dp.id === cp.id)) {
+          console.log("Rescuing newly-added offline parent:", cp.name);
+          try {
+            const invData = normalizeToInvoice(cp, parentId);
+            await setDoc(doc(db, 'invoices', cp.id), invData);
+          } catch (e) {
+            console.error("Auto rescue failed for parent", cp.name, e);
+          }
+        }
+      });
+    }
 
     // Persist again locally
     localStorage.setItem(`${CACHE_SETTINGS}_${parentId}`, JSON.stringify(finalSettings));
@@ -227,7 +271,7 @@ export async function saveApeeSettings(parentId: string, settings: ApeeSettings)
   if (!parentId) return;
 
   try {
-    await setDoc(doc(db, 'invoices', 'apee_settings'), {
+    await setDoc(doc(db, 'invoices', `${parentId}_settings`), {
       id: 'apee_settings',
       studentId: 'apee_settings',
       parentId,
@@ -243,9 +287,18 @@ export async function saveApeeSettings(parentId: string, settings: ApeeSettings)
       pedManagerName: settings.pedManagerName || '',
       pedManagerPhone: settings.pedManagerPhone || '',
       pedManagerPassword: settings.pedManagerPassword || '',
+      logoUrl: settings.logoUrl || '',
+      directorName: settings.directorName || '',
+      directorPhone: settings.directorPhone || '',
+      directorEmail: settings.directorEmail || '',
+      surveillantName: settings.surveillantName || '',
+      surveillantPhone: settings.surveillantPhone || '',
+      censeurName: settings.censeurName || '',
+      censeurPhone: settings.censeurPhone || '',
+      classTeachersList: JSON.stringify(settings.classTeachers || []),
     });
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, 'invoices/apee_settings');
+    handleFirestoreError(err, OperationType.WRITE, `invoices/${parentId}_settings`);
   }
 }
 
@@ -375,7 +428,7 @@ export async function importFullBackup(
     const batch = writeBatch(db);
 
     // Write settings
-    const settingsDocRef = doc(db, 'invoices', 'apee_settings');
+    const settingsDocRef = doc(db, 'invoices', `${parentId}_settings`);
     batch.set(settingsDocRef, {
       id: 'apee_settings',
       studentId: 'apee_settings',

@@ -8,6 +8,8 @@ export interface Student {
   teacherName: string;
   teacherEmail: string;
   dob: string;
+  gradesValidated?: boolean;
+  attendanceValidated?: boolean;
 }
 
 export interface Grade {
@@ -113,6 +115,15 @@ export interface Invoice {
   pedManagerName?: string;
   pedManagerPhone?: string;
   pedManagerPassword?: string;
+  logoUrl?: string;
+  directorName?: string;
+  directorPhone?: string;
+  directorEmail?: string;
+  surveillantName?: string;
+  surveillantPhone?: string;
+  censeurName?: string;
+  censeurPhone?: string;
+  classTeachersList?: string;
 }
 
 export interface ApeeStudentLink {
@@ -177,6 +188,15 @@ export interface ApeeSettings {
   pedManagerName?: string;
   pedManagerPhone?: string;
   pedManagerPassword?: string;
+  logoUrl?: string;
+  directorName?: string;
+  directorPhone?: string;
+  directorEmail?: string;
+  surveillantName?: string;
+  surveillantPhone?: string;
+  censeurName?: string;
+  censeurPhone?: string;
+  classTeachers?: Array<{ classRoom: string; teacherName: string; teacherPhone: string; teacherEmail: string }>;
 }
 
 export interface Movie {

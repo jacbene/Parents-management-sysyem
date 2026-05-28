@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, FileSpreadsheet, Printer, Calendar, RefreshCw, BarChart2, DollarSign, Percent, TrendingUp, CheckCircle } from 'lucide-react';
 import { ApeeParent, ApeeSettings } from '../../types';
+import { jsPDF } from 'jspdf';
 
 interface ApeeReportingProps {
   parents: ApeeParent[];
@@ -115,7 +116,224 @@ export default function ApeeReporting({ parents, settings }: ApeeReportingProps)
   };
 
   const handlePrintBilan = () => {
-    window.print();
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    let y = 15;
+    const margin = 15;
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const contentWidth = pageWidth - (2 * margin); // 180mm
+    let pageCount = 1;
+
+    const drawPageHeaderFooter = (num: number) => {
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(margin, 12, margin + contentWidth, 12);
+      
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text(`Bilan Financier APEE - ${settings.associationName || "CES Ekali 1"} • Année : ${settings.schoolYear || ""}`, margin, 9);
+      
+      doc.line(margin, pageHeight - 12, margin + contentWidth, pageHeight - 12);
+      doc.text(`Page ${num}`, margin + contentWidth - 12, pageHeight - 8);
+      doc.text(`Édité par PASMA-SYS Analytics • Période : ${filterPeriod.toUpperCase()}`, margin, pageHeight - 8);
+    };
+
+    drawPageHeaderFooter(pageCount);
+
+    // Cameroon Official Top Headers
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text("RÉPUBLIQUE DU CAMEROUN", margin, y + 4);
+    doc.text("REPUBLIC OF CAMEROON", margin + contentWidth, y + 4, { align: 'right' });
+
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(6.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Paix - Travail - Patrie", margin, y + 8);
+    doc.text("Peace - Work - Fatherland", margin + contentWidth, y + 8, { align: 'right' });
+
+    y += 15;
+
+    // Title Block
+    doc.setFillColor(30, 41, 59); // Slate 800
+    doc.rect(margin, y, contentWidth, 14, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text("BILAN FINANCIER GLOBAL : RECOUVREMENT DES COTISATIONS APEE", margin + 5, y + 9);
+
+    y += 20;
+
+    // Section I: Global KPIs Cards
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text("I. COMPTE SYNTHÉTIQUE DE TRÉSORERIE GLOBLALE", margin, y);
+    y += 4;
+    
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.35);
+    doc.line(margin, y, margin + contentWidth, y);
+    y += 5;
+
+    // Layout four metric columns
+    doc.setFillColor(248, 250, 252);
+    doc.rect(margin, y, contentWidth, 18, 'F');
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(margin, y, contentWidth, 18, 'D');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text("BUDGET ATTENDU", margin + 4, y + 5);
+    doc.text("SOMME RECOUVREÉ", margin + 50, y + 5);
+    doc.text("DÉSERTE / RESTE", margin + 98, y + 5);
+    doc.text("TAUX DE RECOUV.", margin + 144, y + 5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${totalExpectedAmount.toLocaleString()} F`, margin + 4, y + 12);
+    
+    doc.setTextColor(79, 70, 229); // Indigo
+    doc.text(`${totalCollectedAmountAlready.toLocaleString()} F`, margin + 50, y + 12);
+
+    doc.setTextColor(239, 68, 68); // Red
+    doc.text(`${totalDebtAmount.toLocaleString()} F`, margin + 98, y + 12);
+
+    doc.setTextColor(16, 185, 129); // Green
+    doc.text(`${rateCollectedPercent.toFixed(1)} %`, margin + 144, y + 12);
+
+    y += 26;
+
+    // Section II: Class level statistics
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text("II. RÉCAPITULATIF STATISTIQUE DES RECOUVREMENTS PAR NIVEAU / CLASSE", margin, y);
+    y += 4;
+    
+    doc.line(margin, y, margin + contentWidth, y);
+    y += 5;
+
+    // Classes Table Headers
+    doc.setFillColor(241, 245, 249);
+    doc.rect(margin, y, contentWidth, 6.5, 'F');
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Classe Évaluée", margin + 3, y + 4.5);
+    doc.text("Effectifs", margin + 45, y + 4.5);
+    doc.text("Montant Attendu (FCFA)", margin + 75, y + 4.5);
+    doc.text("Montant Recouvré (FCFA)", margin + 120, y + 4.5);
+    doc.text("Taux Réel", margin + 175, y + 4.5, { align: 'right' });
+
+    y += 6.5;
+
+    const classesKeys = Object.keys(classStatsMap);
+    classesKeys.forEach((clsKey) => {
+      const info = classStatsMap[clsKey];
+      if (y > pageHeight - 20) {
+        doc.addPage();
+        pageCount++;
+        drawPageHeaderFooter(pageCount);
+        y = 25;
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(71, 85, 105);
+
+      doc.text(clsKey, margin + 3, y + 4.5);
+      doc.text(`${info.pupilsCount} élèves`, margin + 45, y + 4.5);
+      doc.text(info.expected.toLocaleString(), margin + 75, y + 4.5);
+      doc.text(info.collected.toLocaleString(), margin + 120, y + 4.5);
+
+      const clsRate = info.expected > 0 ? (info.collected / info.expected) * 100 : 0;
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${clsRate.toFixed(1)} %`, margin + 175, y + 4.5, { align: 'right' });
+
+      y += 6.5;
+
+      doc.setDrawColor(241, 245, 249);
+      doc.line(margin, y, margin + contentWidth, y);
+    });
+
+    y += 8;
+
+    // Section III: Detailed periodic logs
+    if (filteredPayments.length > 0) {
+      if (y > pageHeight - 35) {
+        doc.addPage();
+        pageCount++;
+        drawPageHeaderFooter(pageCount);
+        y = 25;
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`III. JOURNAL DES OPÉRATIONS D'ÉMARGEMENT DE LA PÉRIODE (${filterPeriod.toUpperCase()})`, margin, y);
+      y += 4;
+      
+      doc.setDrawColor(226, 232, 240);
+      doc.line(margin, y, margin + contentWidth, y);
+      y += 5;
+
+      // Payments Table Headers
+      doc.setFillColor(241, 245, 249);
+      doc.rect(margin, y, contentWidth, 6.5, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Date Saisie", margin + 3, y + 4.5);
+      doc.text("Nom du Parent d'Élève", margin + 30, y + 4.5);
+      doc.text("Téléphone", margin + 95, y + 4.5);
+      doc.text("Mode Versement", margin + 128, y + 4.5);
+      doc.text("Montant Saisi", margin + 175, y + 4.5, { align: 'right' });
+
+      y += 6.5;
+
+      filteredPayments.forEach((pay) => {
+        if (y > pageHeight - 20) {
+          doc.addPage();
+          pageCount++;
+          drawPageHeaderFooter(pageCount);
+          y = 25;
+        }
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(71, 85, 105);
+
+        doc.text(new Date(pay.date).toLocaleDateString('fr-FR'), margin + 3, y + 4.5);
+        doc.text(pay.parentName.toUpperCase(), margin + 30, y + 4.5);
+        doc.text(pay.parentPhone, margin + 95, y + 4.5);
+        doc.text(pay.method || 'Espèces', margin + 128, y + 4.5);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${pay.amount.toLocaleString()} F`, margin + 175, y + 4.5, { align: 'right' });
+
+        y += 6.5;
+
+        doc.setDrawColor(241, 245, 249);
+        doc.line(margin, y, margin + contentWidth, y);
+      });
+    }
+
+    doc.save(`bilan_financier_apee_${settings.schoolYear.replace(/\//g, '_')}_${filterPeriod}.pdf`);
+    setSuccessMsg('Bilan financier exporté avec succès sous format PDF !');
+    setTimeout(() => setSuccessMsg(null), 4000);
   };
 
   return (
@@ -149,10 +367,10 @@ export default function ApeeReporting({ parents, settings }: ApeeReportingProps)
 
           <button
             onClick={handlePrintBilan}
-            className="px-3 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-black text-white rounded-xl flex items-center gap-1.5 cursor-pointer transition shadow-2xs"
-            title="Lancer l'impression"
+            className="px-3.5 py-2 text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-1.5 cursor-pointer transition shadow-md active:scale-97"
+            title="Générer un bilan financier au format PDF prêt pour l'édition et l'impression physique"
           >
-            <Printer className="h-3.5 w-3.5 text-amber-400" /> Imprimer Bilan
+            <Download className="h-4 w-4 text-amber-300" /> Télécharger Bilan (PDF)
           </button>
         </div>
       </div>

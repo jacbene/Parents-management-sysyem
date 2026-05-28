@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Grade, Student } from '../types';
-import { Award, BookOpen, TrendingUp, Sparkles, Filter, Plus, Trash2, Lock, Unlock, CheckCircle } from 'lucide-react';
+import { Award, BookOpen, TrendingUp, Sparkles, Filter, Plus, Trash2, Lock, Unlock, CheckCircle, Printer } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 
 interface GradesDashboardProps {
   grades: Grade[];
@@ -13,6 +13,8 @@ interface GradesDashboardProps {
   pedManagerName?: string;
   hasPedPassword?: boolean;
   activeStudent?: Student | null;
+  onUpdateStudent?: (updated: Student) => Promise<boolean>;
+  onPrintReport?: () => void;
 }
 
 export default function GradesDashboard({
@@ -24,8 +26,15 @@ export default function GradesDashboard({
   pedManagerName = '',
   hasPedPassword = false,
   activeStudent,
+  onUpdateStudent,
+  onPrintReport,
 }: GradesDashboardProps) {
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
+  const [isMounted, setIsMounted] = useState(false);
+  
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
   
   // Add Grade states
   const [showAddForm, setShowAddForm] = useState(false);
@@ -69,9 +78,50 @@ export default function GradesDashboard({
     return 'bg-red-50 border-red-200 text-red-800';
   };
 
+  // Helper to verify that the active user is the student's titular teacher
+  const verifyTeacherIdentity = (): boolean => {
+    if (!activeStudent) return false;
+    
+    // 1. Check if grades are officially validated first
+    if (activeStudent.gradesValidated) {
+      alert("🔒 Impossible de modifier : Ce bulletin de notes a été officiellement validé par le responsable pédagogique et ne peut plus subir de modification.");
+      return false;
+    }
+
+    const expectedName = activeStudent.teacherName || "Enseignant principal";
+    const expectedEmail = activeStudent.teacherEmail || "";
+    
+    // Check session cache
+    const saved = sessionStorage.getItem('active_teacher_identity');
+    if (saved && (
+      saved.toLowerCase().trim() === expectedName.toLowerCase().trim() ||
+      saved.toLowerCase().trim() === expectedEmail.toLowerCase().trim()
+    )) {
+      return true;
+    }
+
+    const inputName = prompt(
+      `🔒 Sécurité Enseignant Titulaire\nSeul le professeur titulaire (${expectedName}) est autorisé à modifier ces notes.\n\nVeuillez saisir votre Nom d'enseignant pour confirmer votre identité :`
+    );
+    if (!inputName) return false;
+
+    const queryLower = inputName.trim().toLowerCase();
+    if (
+      queryLower === expectedName.toLowerCase().trim() ||
+      queryLower === expectedEmail.toLowerCase().trim() ||
+      expectedName.toLowerCase().includes(queryLower) ||
+      queryLower.includes(expectedName.toLowerCase().trim())
+    ) {
+      sessionStorage.setItem('active_teacher_identity', inputName.trim());
+      return true;
+    } else {
+      alert(`Accès refusé.\nVous avez saisi : "${inputName}".\nL'enseignant titulaire enregistré pour ${activeStudent.name} est : "${expectedName}".`);
+      return false;
+    }
+  };
+
   const handleOpenForm = () => {
-    if (hasPedPassword && !isPedAuthorized && onPromptUnlockPed) {
-      onPromptUnlockPed();
+    if (!verifyTeacherIdentity()) {
       return;
     }
     setGradeDate(new Date().toISOString().split('T')[0]);
@@ -84,12 +134,19 @@ export default function GradesDashboard({
       alert('Veuillez sélectionner un élève avant de pouvoir introduire des notes.');
       return;
     }
+    
+    // Double check validity and lock
+    if (activeStudent.gradesValidated) {
+      alert("🔒 Impossible d'enregistrer : Le bulletin de notes est validé.");
+      return;
+    }
+
     if (!examName.trim()) {
       alert("Veuillez spécifier l'intitulé de l'évaluation.");
       return;
     }
     if (score < 0 || maxScore <= 0 || score > maxScore) {
-      alert("La note saisie doit être entre 0 et la note maximale configured.");
+      alert("La note saisie doit être entre 0 et la note maximale configurée.");
       return;
     }
 
@@ -116,13 +173,28 @@ export default function GradesDashboard({
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (hasPedPassword && !isPedAuthorized && onPromptUnlockPed) {
-      onPromptUnlockPed();
+    if (!verifyTeacherIdentity()) {
       return;
     }
     const confirm = window.confirm(`Voulez-vous supprimer l'évaluation "${name}" ?`);
     if (confirm && onDeleteGrade) {
       await onDeleteGrade(id);
+    }
+  };
+
+  const handleToggleValidation = async () => {
+    if (!activeStudent || !onUpdateStudent) return;
+    const isCurrentlyValidated = !!activeStudent.gradesValidated;
+    const confirmMsg = isCurrentlyValidated 
+      ? `Voulez-vous invalider (déverrouiller) le bulletin de notes pour ${activeStudent.name} ? Cela permettra à nouveau les modifications par son enseignant.`
+      : `Voulez-vous valider officiellement le bulletin de notes pour ${activeStudent.name} ? Une fois validé, plus aucune note ne pourra être ajoutée ou supprimée.`;
+    
+    if (window.confirm(confirmMsg)) {
+      const updated: Student = {
+        ...activeStudent,
+        gradesValidated: !isCurrentlyValidated
+      };
+      await onUpdateStudent(updated);
     }
   };
 
@@ -139,17 +211,48 @@ export default function GradesDashboard({
           </p>
         </div>
 
-        <button
-          onClick={handleOpenForm}
-          className="px-4 py-2 bg-slate-900 hover:bg-slate-850 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-        >
-          <Plus className="h-4 w-4" /> Introduire Note
-        </button>
+        <div className="flex items-center gap-2">
+          {onPrintReport && (
+            <button
+              onClick={onPrintReport}
+              className="px-4 py-2 bg-white text-gray-700 border border-gray-250 hover:bg-gray-50 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+            >
+              <Printer className="h-4 w-4" /> Imprimer le Bulletin
+            </button>
+          )}
+
+          <button
+            onClick={handleOpenForm}
+            disabled={!!activeStudent?.gradesValidated}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
+              activeStudent?.gradesValidated
+                ? 'bg-slate-100 text-slate-400 border border-slate-205 cursor-not-allowed'
+                : 'bg-slate-900 hover:bg-slate-850 text-white'
+            }`}
+          >
+            <Plus className="h-4 w-4" /> Introduire Note
+          </button>
+        </div>
       </div>
+
+      {/* Validated Bulletin Banner locked status */}
+      {activeStudent?.gradesValidated && (
+        <div className="p-4 rounded-2xl border bg-amber-50/50 text-amber-950 border-amber-250 text-xs flex items-center gap-3 animate-fade-in shadow-2xs">
+          <Lock className="h-5 w-5 text-amber-600 shrink-0" />
+          <div className="space-y-0.5">
+            <span className="font-extrabold uppercase tracking-wide text-[10px] text-amber-800 flex items-center gap-1">
+              🔒 Bulletin de Notes Officiellement Validé & Scellé
+            </span>
+            <p className="font-medium text-amber-900">
+              Le responsable pédagogique a validé le relevé de notes pour <strong>{activeStudent.name}</strong>. Plus aucune modification, ajout ou suppression de note n'est autorisée.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Security Status Header */}
       {hasPedPassword && (
-        <div className={`p-3.5 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+        <div className={`p-4 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
           isPedAuthorized ? 'bg-emerald-50 text-emerald-950 border-emerald-150' : 'bg-slate-50 text-slate-800 border-slate-150'
         }`}>
           <div className="flex items-center gap-2">
@@ -160,23 +263,40 @@ export default function GradesDashboard({
             )}
             <div>
               <span className="font-extrabold flex items-center gap-1.5 uppercase tracking-wide text-[10px] text-slate-650">
-                {isPedAuthorized ? '🔓 Accès Officiel Débloqué' : '🔒 Bulletin de Notes Verrouillé (Lecture Seule)'}
+                {isPedAuthorized ? '🔓 Mode Responsable Débloqué' : '🔒 Niveau de Sécurité Responsable Pédagogique'}
               </span>
               <p className="font-medium text-slate-600 mt-0.5">
                 {isPedAuthorized 
-                  ? `Vous agissez en qualité de : ${pedManagerName || "Principal Responsable Pédagogique"}`
-                  : `L'introduction ou la suppression de notes officielles requiert le mot de passe du Surveillant ou Censeur.`}
+                  ? `Qualité accréditée : ${pedManagerName || "Surveillant Général / Censeur"}`
+                  : `La validation ou l'invalidation officielle du bulletin de l'élève requiert le mot de passe de direction.`}
               </p>
             </div>
           </div>
-          {!isPedAuthorized && onPromptUnlockPed && (
-            <button
-              onClick={onPromptUnlockPed}
-              className="px-3 py-1.5 bg-white text-slate-800 border border-slate-250 font-bold rounded-lg text-[10px] hover:bg-slate-50 uppercase tracking-wider transition cursor-pointer shrink-0"
-            >
-              Saisir mot de passe
-            </button>
-          )}
+          
+          <div className="flex items-center gap-2">
+            {isPedAuthorized && activeStudent && (
+              <button
+                type="button"
+                onClick={handleToggleValidation}
+                className={`px-3 py-1.5 font-bold rounded-lg text-[10px] uppercase tracking-wider transition cursor-pointer shrink-0 border ${
+                  activeStudent.gradesValidated 
+                    ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' 
+                    : 'bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-700'
+                }`}
+              >
+                {activeStudent.gradesValidated ? '🔓 Invalider le Bulletin' : '🔒 Valider le Bulletin'}
+              </button>
+            )}
+
+            {!isPedAuthorized && onPromptUnlockPed && (
+              <button
+                onClick={onPromptUnlockPed}
+                className="px-3 py-1.5 bg-white text-slate-800 border border-slate-250 font-bold rounded-lg text-[10px] hover:bg-slate-50 uppercase tracking-wider transition cursor-pointer shrink-0"
+              >
+                Saisir mot de passe
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -367,38 +487,111 @@ export default function GradesDashboard({
             <motion.div
               initial={{ opacity: 0, scale: 0.99 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="p-5 bg-white border border-gray-100 rounded-2xl space-y-4 shadow-sm"
+              className="p-5 bg-white border border-gray-150 rounded-2xl space-y-4 shadow-sm"
             >
-              <h3 className="text-sm font-semibold text-gray-800">Évolution Temporelle des Notes (sur 20)</h3>
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="date" tickStyle={{ fontSize: 11 }} stroke="#94a3b8" />
-                    <YAxis domain={[0, 20]} tickStyle={{ fontSize: 11 }} stroke="#94a3b8" />
-                    <Tooltip
-                      contentStyle={{
-                        border: '1px solid #f1f5f9',
-                        borderRadius: '12px',
-                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)',
-                        fontSize: '12px'
-                      }}
-                      formatter={(value: any, name: string, props: any) => [
-                        `${value} / 20`,
-                        `Note (${props.payload.subject})`
-                      ]}
-                      labelFormatter={(label) => `Évaluation du : ${label}`}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="score"
-                      stroke="#4f46e5"
-                      strokeWidth={3}
-                      dot={{ r: 5, fill: '#4f46e5', strokeWidth: 0 }}
-                      activeDot={{ r: 7 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
+                    <TrendingUp className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 tracking-tight">Courbe de Progression • Performance Trend</h3>
+                    <p className="text-[10px] text-gray-500">Moyennes extrapolées sur base commune de 20 points pour suivre l'évolution académique globale.</p>
+                  </div>
+                </div>
+                
+                {/* Visual Legend Key */}
+                <div className="flex items-center gap-4 text-[9px] font-sans font-semibold text-slate-500 pl-0.5 sm:pl-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-6 rounded bg-indigo-600"></span>
+                    <span>Note convertie (/20)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-6 rounded border-t border-dashed border-rose-400"></span>
+                    <span className="text-rose-600">Moyenne de passage (10/20)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-68 w-full pt-1">
+                {isMounted ? (
+                  <ResponsiveContainer width="100%" height={272} minWidth={0}>
+                    <LineChart data={chartData} margin={{ top: 15, right: 15, left: -22, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis 
+                        dataKey="date" 
+                        tickLine={false}
+                        axisLine={false}
+                        tickStyle={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} 
+                        dy={8}
+                      />
+                      <YAxis 
+                        domain={[0, 20]} 
+                        tickCount={11}
+                        tickLine={false}
+                        axisLine={false}
+                        tickStyle={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} 
+                        dx={-4}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '14px',
+                          boxShadow: '0 8px 16px -2px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05)',
+                          fontSize: '11px',
+                          padding: '10px 14px'
+                        }}
+                        formatter={(value: any, name: string, props: any) => {
+                          const payload = props.payload;
+                          const scoreColor = value >= 10 ? 'text-emerald-700 font-extrabold' : 'text-rose-600 font-extrabold';
+                          return [
+                            <div className="space-y-1" key="content">
+                              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                                <span>Matière :</span>
+                                <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-indigo-700 font-bold">{payload.subject}</span>
+                              </div>
+                              <div className="text-slate-600 font-medium">Éval : <span className="font-semibold text-slate-900">{payload.examName}</span></div>
+                              <div className="pt-1 text-xs border-t border-slate-100 flex items-center justify-between gap-3">
+                                <span className="text-gray-500 font-sans">Valuation :</span>
+                                <span className={scoreColor}>{value} / 20</span>
+                              </div>
+                            </div>,
+                            null
+                          ];
+                        }}
+                        labelFormatter={(label) => `📅 Date de l'Évaluation : ${label}`}
+                      />
+                      
+                      {/* passing average reference line */}
+                      <ReferenceLine 
+                        y={10} 
+                        stroke="#f43f5e" 
+                        strokeDasharray="4 4" 
+                        strokeWidth={1.25}
+                        label={{ 
+                          value: 'Moyenne requise (10/20)', 
+                          fill: '#f43f5e', 
+                          fontSize: 8.5, 
+                          position: 'insideBottomRight', 
+                          offset: 7, 
+                          fontWeight: 'bold' 
+                        }} 
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="score"
+                        stroke="#4f46e5"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: '#4f46e5', stroke: '#ffffff', strokeWidth: 1.5 }}
+                        activeDot={{ r: 6, stroke: '#4f46e5', strokeWidth: 2, fill: '#ffffff' }}
+                        animationDuration={805}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full bg-slate-50 rounded-2xl animate-pulse flex items-center justify-center text-xs text-slate-400 font-medium font-sans">Chargement de la courbe de progression...</div>
+                )}
               </div>
             </motion.div>
           )}
@@ -450,6 +643,17 @@ export default function GradesDashboard({
                           <span className="text-[11px] font-mono text-gray-400">
                             {new Date(g.date).toLocaleDateString('fr-FR')}
                           </span>
+                          {activeStudent?.gradesValidated ? (
+                            <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1 select-none">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Validated
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1 select-none">
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                              Pending
+                            </span>
+                          )}
                         </div>
                         <h4 className="font-semibold text-gray-900 text-sm">
                           {g.examName}
