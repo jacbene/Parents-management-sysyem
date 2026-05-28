@@ -179,3 +179,19 @@ export interface ApeeSettings {
   pedManagerPassword?: string;
 }
 
+export interface Movie {
+  id: string;
+  title: string;
+  genre: string;
+  imageUrl: string;
+  description?: string;
+}
+
+export interface Rating {
+  id: string;
+  movieId: string;
+  userId: string;
+  rating: number;
+  reviewText?: string;
+  reviewDate: string;
+}

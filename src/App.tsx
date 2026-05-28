@@ -40,6 +40,7 @@ import AppointmentsScheduler from './components/AppointmentsScheduler';
 import MessageInbox from './components/MessageInbox';
 import StudentPrintModal from './components/StudentPrintModal';
 import PortalOnboarding from './components/PortalOnboarding';
+import MoviePortal from './components/MoviePortal';
 
 // Icons
 import {
@@ -64,7 +65,8 @@ import {
   Settings,
   Plus,
   Bell,
-  Shield
+  Shield,
+  Film
 } from 'lucide-react';
 
 type TabType = 
@@ -83,7 +85,8 @@ type TabType =
   | 'attendance' 
   | 'billing' 
   | 'appointments' 
-  | 'messages';
+  | 'messages'
+  | 'movies';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -342,7 +345,7 @@ export default function App() {
       ] = await Promise.all([
         getDocs(studentQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'students')),
         getDocs(gradeQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'grades')),
-        getDocs(attendanceQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'attendance')),
+        getDocs(attendanceSnapshot).catch(err => handleFirestoreError(err, OperationType.LIST, 'attendance')),
         getDocs(homeworkQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'homeworks')),
         getDocs(appointmentQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'appointments')),
         getDocs(messageQuery).catch(err => handleFirestoreError(err, OperationType.LIST, 'messages')),
@@ -1188,6 +1191,17 @@ export default function App() {
                         </button>
                       </>
                     )}
+
+                    <button
+                      onClick={() => setActiveTab('movies')}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                        activeTab === 'movies'
+                          ? 'bg-slate-900 text-white'
+                          : 'text-gray-650 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2"><Film className="h-4 w-4" /> Catalogue Films</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1369,6 +1383,12 @@ export default function App() {
                     {activeTab === 'messages' && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key="messages">
                         <MessageInbox messages={messages} students={students} onAddMessage={handleAddMessageInPlace} />
+                      </motion.div>
+                    )}
+
+                    {activeTab === 'movies' && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key="movies">
+                        <MoviePortal />
                       </motion.div>
                     )}
                   </AnimatePresence>

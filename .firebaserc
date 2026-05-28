@@ -1,0 +1,14 @@
+{
+  "projects": {},
+  "targets": {
+    "pama-sys-76338037-79976": {
+      "hosting": {
+        "pasma-sys-29032": [
+          "pama-sys-76338037-79976",
+          "pasma-sys-29032"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
